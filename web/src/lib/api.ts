@@ -39,6 +39,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+import type { GroupDetail, GroupListItem, UserSearchResult } from './types'
+
 export const api = {
   auth: {
     register: (email: string, password: string, name: string) =>
@@ -52,5 +54,27 @@ export const api = {
         body: JSON.stringify({ email, password }),
       }),
     me: () => request<{ id: string; email: string; name: string }>('/api/auth/me'),
+  },
+  groups: {
+    list: () => request<GroupListItem[]>('/api/groups'),
+    get: (id: string) => request<GroupDetail>(`/api/groups/${id}`),
+    create: (name: string, memberEmails: string[] = []) =>
+      request<GroupDetail>('/api/groups', {
+        method: 'POST',
+        body: JSON.stringify({ name, member_emails: memberEmails }),
+      }),
+    addMember: (groupId: string, email: string) =>
+      request<GroupDetail>(`/api/groups/${groupId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      }),
+    updateSplits: (groupId: string, splits: Record<string, number>) =>
+      request<GroupDetail>(`/api/groups/${groupId}/splits`, {
+        method: 'PUT',
+        body: JSON.stringify({ splits }),
+      }),
+  },
+  users: {
+    search: (q: string) => request<UserSearchResult[]>(`/api/users/search?q=${encodeURIComponent(q)}`),
   },
 }

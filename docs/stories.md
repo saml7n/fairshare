@@ -159,18 +159,18 @@ As a **user**, I want **to create an account and log in**, so that **my expenses
 As a **user**, I want **to create expense groups and add other registered users**, so that **I can track shared expenses with specific people**.
 
 ### Acceptance criteria
-- [ ] Database models:
+- [x] Database models:
   - `Group` table: `id` (UUID), `name`, `created_by` (FK→users), `created_at`.
   - `GroupMember` table: `id` (UUID), `group_id` (FK→groups), `user_id` (FK→users), `default_split_percent`, `joined_at`.
-- [ ] API endpoints:
+- [x] API endpoints:
   - `GET /api/groups` — list groups the current user belongs to. Returns `[{id, name, member_count, created_at}]`.
   - `POST /api/groups` — create group with `{name, member_emails[]}`. Creator auto-added. Default splits set to equal (100% / N members). Unknown emails are silently skipped (user must register first).
   - `GET /api/groups/:id` — group detail with full member list and split percentages. Returns 403 if not a member.
   - `POST /api/groups/:id/members` — add member by email. Recalculates equal splits for all members. Returns 404 if email not found, 409 if already a member.
   - `PUT /api/groups/:id/splits` — update default split percentages. Validates they sum to 100%.
-- [ ] API endpoint for user search:
+- [x] API endpoint for user search:
   - `GET /api/users/search?q=...` — search users by email or name prefix (for adding to groups).
-- [ ] Web pages:
+- [x] Web pages:
   - `/groups` — list of groups with member count and "Create Group" button.
   - `/groups/new` — form to create a group (name + add members by email search).
   - `/groups/:id` — group detail page showing members, their split percentages, and an "Add Member" button.
@@ -194,6 +194,18 @@ As a **user**, I want **to create expense groups and add other registered users*
 
 ### Blocked until answered
 - None.
+
+### Completion
+- Unit tests: 21 passed (10 group tests + previous 11)
+- Web build: succeeds
+- QA1: Groups page shows empty state — PASS
+- QA2: Create "Trip to Paris" → redirected to group detail — PASS
+- QA3: Alice sole member at 100% — PASS
+- QA4: Bob registered via curl — PASS
+- QA5: Add Bob → both at 50% — PASS
+- QA6: Edit splits to 60/40 → saved correctly — PASS
+- QA7: Groups list shows "Trip to Paris" with 2 members — PASS
+- Mobile viewport: layout renders correctly with bottom nav — PASS
 
 ---
 
