@@ -1,0 +1,43 @@
+"""FairShare — Splitwise-style expense splitting application."""
+
+from contextlib import asynccontextmanager
+
+import structlog
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.db.session import init_db
+from app.logging import setup_logging
+
+setup_logging()
+logger = structlog.get_logger()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup / shutdown lifecycle."""
+    init_db()
+    logger.info("app_started")
+    yield
+
+
+app = FastAPI(title="FairShare", description="Splitwise-style expense splitting", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/health")
+def health():
+    """Health check endpoint."""
+    return {"status": "ok"}

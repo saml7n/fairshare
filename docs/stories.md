@@ -67,7 +67,7 @@ As a **project lead**, I want **clear decisions on tools, stack, and constraints
 As a **developer**, I want **a working project skeleton with linting, testing, and dev scripts configured**, so that **every subsequent story starts from a runnable baseline**.
 
 ### Acceptance criteria
-- [ ] `server/` directory exists with:
+- [x] `server/` directory exists with:
   - `pyproject.toml` listing core dependencies: `fastapi`, `uvicorn`, `pydantic`, `pydantic-settings`, `sqlmodel`, `bcrypt`, `PyJWT`, `structlog`, `email-validator`.
   - `app/main.py` — a FastAPI app with a health-check endpoint (`GET /health` → `{"status": "ok"}`).
   - `app/config.py` — reads env vars via `pydantic-settings` (`BaseSettings`).
@@ -75,16 +75,16 @@ As a **developer**, I want **a working project skeleton with linting, testing, a
   - `app/db/models.py` — empty models file (tables added in later stories).
   - `app/logging.py` — structlog configuration with JSON output.
   - `tests/` directory with a passing smoke test for the health endpoint.
-- [ ] `web/` directory exists with:
+- [x] `web/` directory exists with:
   - Vite + React 19 + TypeScript + Tailwind CSS v4 scaffolded.
   - shadcn/ui base components: Button, Input, Label.
   - A placeholder `App.tsx` that renders "FairShare".
   - Dev server starts with `npm run dev` and proxies `/api` to `localhost:3000`.
-- [ ] `.env.example` at repo root lists all anticipated env vars.
-- [ ] `.gitignore` covers Python and Node artifacts.
-- [ ] `Makefile` with `dev`, `test`, `test-server`, `test-web`, `deploy` targets.
-- [ ] `README.md` with setup instructions for both `server/` and `web/`.
-- [ ] Deployment configs: `Dockerfile.fly`, `fly.toml`, `fly/nginx.conf`, `fly/supervisord.conf`.
+- [x] `.env.example` at repo root lists all anticipated env vars.
+- [x] `.gitignore` covers Python and Node artifacts.
+- [x] `Makefile` with `dev`, `test`, `test-server`, `test-web`, `deploy` targets.
+- [x] `README.md` with setup instructions for both `server/` and `web/`.
+- [x] Deployment configs: `Dockerfile.fly`, `fly.toml`, `fly/nginx.conf`, `fly/supervisord.conf`.
 
 ### Unit tests
 - `pytest server/tests/` passes — health endpoint returns 200 with `{"status": "ok"}`.
@@ -96,6 +96,12 @@ As a **developer**, I want **a working project skeleton with linting, testing, a
 
 ### Blocked until answered
 - None (depends only on Story 0 answers).
+
+### Completion
+- Server tests: 1 passed
+- Web build: succeeds without errors
+- QA: `curl localhost:3000/health` → `{"status": "ok"}` — PASS
+- QA: Web placeholder renders "FairShare" — PASS
 
 ---
 
