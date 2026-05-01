@@ -39,7 +39,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-import type { BalancesResponse, CreateExpenseSplit, ExpenseItem, GroupDetail, GroupListItem, UserSearchResult } from './types'
+import type { BalancesResponse, CreateExpenseSplit, ExpenseItem, GroupDetail, GroupListItem, PaymentItem, UserSearchResult } from './types'
 
 export const api = {
   auth: {
@@ -88,6 +88,19 @@ export const api = {
       splits?: CreateExpenseSplit[]
     }) =>
       request<ExpenseItem>(`/api/groups/${groupId}/expenses`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  },
+  payments: {
+    list: (groupId: string) =>
+      request<PaymentItem[]>(`/api/groups/${groupId}/payments`),
+    create: (groupId: string, data: {
+      to_user_id: string
+      amount: number
+      note?: string
+    }) =>
+      request<PaymentItem>(`/api/groups/${groupId}/payments`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),

@@ -1,4 +1,4 @@
-/** Group detail page — members, splits, balances, expenses, add expense. */
+/** Group detail page — members, splits, balances, expenses, payments. */
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
-import type { GroupDetail as GroupDetailType, ExpenseItem, CreateExpenseSplit, BalancesResponse } from '@/lib/types'
+import type { GroupDetail as GroupDetailType, ExpenseItem, CreateExpenseSplit, BalancesResponse, PaymentItem } from '@/lib/types'
 import { getUserInfo } from '@/lib/auth'
-import { UserPlus, ArrowLeft, Plus, Receipt, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react'
+import { UserPlus, ArrowLeft, Plus, Receipt, TrendingUp, TrendingDown, ArrowRight, Banknote } from 'lucide-react'
 
 export default function GroupDetail() {
   const { id } = useParams<{ id: string }>()
@@ -33,6 +33,14 @@ export default function GroupDetail() {
   const [expError, setExpError] = useState<string | null>(null)
   const [expLoading, setExpLoading] = useState(false)
 
+  const [payments, setPayments] = useState<PaymentItem[]>([])
+  const [showSettle, setShowSettle] = useState(false)
+  const [settleTo, setSettleTo] = useState('')
+  const [settleAmount, setSettleAmount] = useState('')
+  const [settleNote, setSettleNote] = useState('')
+  const [settleError, setSettleError] = useState<string | null>(null)
+  const [settleLoading, setSettleLoading] = useState(false)
+
   const currentUser = getUserInfo()
 
   const applyGroup = (g: GroupDetailType) => {
@@ -47,14 +55,16 @@ export default function GroupDetail() {
   const loadGroup = useCallback(async () => {
     if (!id) return
     try {
-      const [g, exps, bals] = await Promise.all([
+      const [g, exps, bals, pmts] = await Promise.all([
         api.groups.get(id),
         api.expenses.list(id),
         api.balances.get(id),
+        api.payments.list(id),
       ])
       applyGroup(g)
       setExpenses(exps)
       setBalances(bals)
+      setPayments(pmts)
       if (g.members.length > 0 && !expPaidBy) {
         setExpPaidBy(currentUser?.id ?? g.members[0]?.user_id ?? '')
       }
@@ -131,12 +141,14 @@ export default function GroupDetail() {
           .map(([uid, v]) => ({ user_id: uid, amount: parseFloat(v) }))
       }
       await api.expenses.create(id, data)
-      const [exps, bals] = await Promise.all([
+      const [exps, bals, pmts] = await Promise.all([
         api.expenses.list(id),
         api.balances.get(id),
+        api.payments.list(id),
       ])
       setExpenses(exps)
       setBalances(bals)
+      setPayments(pmts)
       setShowAddExpense(false)
       setExpDesc('')
       setExpAmount('')
@@ -157,6 +169,37 @@ export default function GroupDetail() {
       sv[m.user_id] = String(Math.round(amount * m.default_split_percent / 100 * 100) / 100)
     }
     setExpCustomSplits(sv)
+  }
+
+  const handleSettle = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!id) return
+    setSettleError(null)
+    const amount = parseFloat(settleAmount)
+    if (!settleTo) { setSettleError('Select a recipient'); return }
+    if (!amount || amount <= 0) { setSettleError('Amount must be positive'); return }
+    setSettleLoading(true)
+    try {
+      await api.payments.create(id, {
+        to_user_id: settleTo,
+        amount,
+        note: settleNote || undefined,
+      })
+      const [bals, pmts] = await Promise.all([
+        api.balances.get(id),
+        api.payments.list(id),
+      ])
+      setBalances(bals)
+      setPayments(pmts)
+      setShowSettle(false)
+      setSettleTo('')
+      setSettleAmount('')
+      setSettleNote('')
+    } catch (err) {
+      setSettleError(err instanceof Error ? err.message : 'Failed to record payment')
+    } finally {
+      setSettleLoading(false)
+    }
   }
 
   if (loading) {
@@ -299,6 +342,102 @@ export default function GroupDetail() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Settle Up */}
+      {balances && balances.simplified_debts.some(d => d.from_user_id === currentUser?.id) && (
+        <div className="mb-6">
+          {!showSettle ? (
+            <Button onClick={() => {
+              const myDebt = balances.simplified_debts.find(d => d.from_user_id === currentUser?.id)
+              if (myDebt) {
+                setSettleTo(myDebt.to_user_id)
+                setSettleAmount(String(myDebt.amount))
+              }
+              setShowSettle(true)
+            }}>
+              <Banknote className="w-4 h-4 mr-2" />
+              Settle Up
+            </Button>
+          ) : (
+            <form onSubmit={handleSettle} className="space-y-3 p-4 rounded-lg border border-gray-800 bg-gray-900">
+              <h3 className="text-sm font-medium text-gray-300">Record Payment</h3>
+              <div>
+                <Label htmlFor="settle-to">Pay to</Label>
+                <select
+                  id="settle-to"
+                  className="w-full mt-1 bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-white"
+                  value={settleTo}
+                  onChange={(e) => setSettleTo(e.target.value)}
+                >
+                  <option value="">Select member</option>
+                  {group.members
+                    .filter(m => m.user_id !== currentUser?.id)
+                    .map(m => (
+                      <option key={m.user_id} value={m.user_id}>{m.name}</option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="settle-amount">Amount (£)</Label>
+                <Input
+                  id="settle-amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={settleAmount}
+                  onChange={(e) => setSettleAmount(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="settle-note">Note (optional)</Label>
+                <Input
+                  id="settle-note"
+                  value={settleNote}
+                  onChange={(e) => setSettleNote(e.target.value)}
+                  placeholder="e.g. Bank transfer"
+                />
+              </div>
+              {settleError && <p className="text-red-400 text-sm">{settleError}</p>}
+              <div className="flex gap-2">
+                <Button type="submit" disabled={settleLoading}>
+                  {settleLoading ? 'Recording…' : 'Record Payment'}
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => { setShowSettle(false); setSettleError(null) }}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* Payments */}
+      {payments.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">
+            Payments ({payments.length})
+          </h2>
+          <div className="space-y-2">
+            {payments.map(p => (
+              <div key={p.id} className="p-3 rounded-lg border border-gray-800 bg-gray-900/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Banknote className="w-4 h-4 text-green-400" />
+                    <span className="text-white">{p.from_name}</span>
+                    <ArrowRight className="w-3 h-3 text-gray-500" />
+                    <span className="text-white">{p.to_name}</span>
+                  </div>
+                  <span className="text-green-400 font-medium text-sm">£{p.amount.toFixed(2)}</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {p.note && <span>{p.note} · </span>}
+                  {new Date(p.created_at).toLocaleDateString()}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

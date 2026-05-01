@@ -10,6 +10,7 @@ from app.api.auth import router as auth_router
 from app.api.balances import router as balances_router
 from app.api.expenses import router as expenses_router
 from app.api.groups import router as groups_router
+from app.api.payments import router as payments_router
 from app.api.users import router as users_router
 from app.auth import ensure_admin_user, init_auth
 from app.db.session import get_session, init_db
@@ -51,6 +52,7 @@ app.include_router(auth_router)
 app.include_router(balances_router)
 app.include_router(expenses_router)
 app.include_router(groups_router)
+app.include_router(payments_router)
 app.include_router(users_router)
 
 

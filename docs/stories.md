@@ -306,12 +306,12 @@ As a **user**, I want **to see how much I owe or am owed, with the minimum numbe
 As a **user**, I want **to record a payment I've made to another group member**, so that **the balances update and I can track who has settled their debts**.
 
 ### Acceptance criteria
-- [ ] Database model:
+- [x] Database model:
   - `Payment` table: `id` (UUID), `group_id` (FK→groups), `from_user_id` (FK→users), `to_user_id` (FK→users), `amount`, `note` (optional), `created_at`.
-- [ ] API endpoints:
+- [x] API endpoints:
   - `POST /api/groups/:id/payments` — record payment `{to_user_id, amount, note?}`. `from_user_id` is the authenticated user. Validates: positive amount, both users are group members, can't pay yourself.
   - `GET /api/groups/:id/payments` — list all payments in the group (newest first).
-- [ ] Web:
+- [x] Web:
   - "Settle Up" button on the group detail page.
   - Settle up form: select who you're paying (dropdown), amount (pre-filled from simplified debts if applicable), optional note.
   - Payment history section on the group page.
@@ -333,6 +333,16 @@ As a **user**, I want **to record a payment I've made to another group member**,
 
 ### Blocked until answered
 - None.
+
+### Completion
+- Unit tests: 42 passed (6 payment tests + previous 36)
+- Web build: succeeds
+- QA1: Bob owes Alice £165 shown correctly — PASS
+- QA2: Bob pays Alice £100 "Bank transfer" → balances update to ±£65 — PASS
+- QA3: Payment appears in history with note — PASS
+- QA4: Bob pays remaining £65 → balances section hidden, no debts — PASS
+- QA5: Self-payment rejection tested in unit tests — PASS
+- Settle Up button auto-fills amount from simplified debts — PASS
 
 ---
 

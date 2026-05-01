@@ -70,3 +70,14 @@ export interface BalancesResponse {
   balances: MemberBalance[]
   simplified_debts: SimplifiedDebt[]
 }
+
+export interface PaymentItem {
+  id: string
+  from_user_id: string
+  from_name: string
+  to_user_id: string
+  to_name: string
+  amount: number
+  note: string
+  created_at: string
+}

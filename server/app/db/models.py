@@ -101,5 +101,6 @@ class Payment(SQLModel, table=True):
     from_user: UUID = Field(foreign_key="users.id")
     to_user: UUID = Field(foreign_key="users.id")
     amount: float = Field(default=0.0)
+    note: str = Field(default="")
     created_by: UUID = Field(foreign_key="users.id")
     created_at: datetime = Field(default_factory=_utcnow)
