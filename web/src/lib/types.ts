@@ -71,6 +71,20 @@ export interface BalancesResponse {
   simplified_debts: SimplifiedDebt[]
 }
 
+export interface GroupSummary {
+  group_id: string
+  group_name: string
+  balance: number
+  member_count: number
+}
+
+export interface DashboardData {
+  total_owed_to_you: number
+  total_you_owe: number
+  net_position: number
+  groups: GroupSummary[]
+}
+
 export interface PaymentItem {
   id: string
   from_user_id: string

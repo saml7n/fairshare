@@ -351,7 +351,7 @@ As a **user**, I want **to record a payment I've made to another group member**,
 As a **user**, I want **a dashboard showing my overall financial position across all groups**, so that **I can quickly see what I owe and what I'm owed at a glance**.
 
 ### Acceptance criteria
-- [ ] Web:
+- [x] Web:
   - `/` (home/dashboard) shows:
     - Total amount you owe across all groups.
     - Total amount owed to you across all groups.
@@ -359,7 +359,7 @@ As a **user**, I want **a dashboard showing my overall financial position across
     - List of groups with your balance in each.
     - Quick links to each group.
   - App shell with navigation sidebar/header: Dashboard, Groups, profile/logout.
-- [ ] Responsive layout that works on mobile.
+- [x] Responsive layout that works on mobile.
 
 ### Unit tests
 - None (frontend-only story, covered by QA).
@@ -372,6 +372,13 @@ As a **user**, I want **a dashboard showing my overall financial position across
 
 ### Blocked until answered
 - None.
+
+### Completion
+- Backend: Dashboard API (GET /api/dashboard) returns cross-group summary
+- QA1: Dashboard shows £140 owed across 2 groups — PASS
+- QA2: Group cards link to group detail pages — PASS
+- QA3: Mobile viewport (375px) renders correctly — PASS
+- Summary cards: Owed to you / You owe / Net with colour coding — PASS
 
 ---
 
