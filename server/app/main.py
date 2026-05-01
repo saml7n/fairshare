@@ -6,7 +6,9 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.db.session import init_db
+from app.api.auth import router as auth_router
+from app.auth import ensure_admin_user, init_auth
+from app.db.session import get_session, init_db
 from app.logging import setup_logging
 
 setup_logging()
@@ -17,6 +19,11 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
     init_db()
+    init_auth()
+
+    session = next(get_session())
+    ensure_admin_user(session)
+
     logger.info("app_started")
     yield
 
@@ -35,6 +42,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 
 @app.get("/health")

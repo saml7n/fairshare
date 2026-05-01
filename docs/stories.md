@@ -110,20 +110,20 @@ As a **developer**, I want **a working project skeleton with linting, testing, a
 As a **user**, I want **to create an account and log in**, so that **my expenses are tied to my identity and I can be added to groups**.
 
 ### Acceptance criteria
-- [ ] Database models:
+- [x] Database models:
   - `User` table with fields: `id` (UUID), `email` (unique, indexed), `password_hash`, `name`, `is_admin`, `created_at`.
-- [ ] API endpoints:
+- [x] API endpoints:
   - `POST /api/auth/register` — accepts `{email, password, name}`, returns `{ok, token, user}`. Validates email format and password length (≥6 chars). Returns 409 if email already taken.
   - `POST /api/auth/login` — accepts `{email, password}`, returns `{ok, token, user}`. Returns 401 on bad credentials.
   - `GET /api/auth/me` — returns the current user (requires Bearer token). Returns 401 if not authenticated.
-- [ ] JWT tokens: HS256, 7-day expiry, payload contains `sub` (user_id), `email`, `name`.
-- [ ] Admin user auto-created on startup from `FAIRSHARE_SECRET_KEY` env var.
-- [ ] Web pages:
+- [x] JWT tokens: HS256, 7-day expiry, payload contains `sub` (user_id), `email`, `name`.
+- [x] Admin user auto-created on startup from `FAIRSHARE_SECRET_KEY` env var.
+- [x] Web pages:
   - `/login` — email + password form, error display, link to register.
   - `/register` — email + password + name form, error display, link to login.
   - `AuthGuard` component wrapping protected routes — redirects to `/login` if no valid token.
   - Token stored in `localStorage`, cleared on 401 responses.
-- [ ] After successful login/register, user is redirected to `/` (dashboard).
+- [x] After successful login/register, user is redirected to `/` (dashboard).
 
 ### Unit tests
 - Register: creates user, returns JWT, rejects duplicate email, rejects short password.
@@ -141,6 +141,16 @@ As a **user**, I want **to create an account and log in**, so that **my expenses
 
 ### Blocked until answered
 - None.
+
+### Completion
+- Unit tests: 12 passed (test_health.py + test_auth.py)
+- Web build: succeeds without errors
+- QA1: Register alice@test.com → redirected to dashboard — PASS
+- QA2: Clear token → login with same creds → redirected to dashboard — PASS
+- QA3: Visit `/` without token → redirected to `/login` — PASS
+- QA4: Wrong password → "Invalid email or password" error shown — PASS
+- QA5: Duplicate email registration → 409 "Email already registered" — PASS
+- QA6: Mobile viewport (375px) — layout renders correctly — PASS
 
 ---
 
