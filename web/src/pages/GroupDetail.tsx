@@ -1,4 +1,4 @@
-/** Group detail page — members, splits, expenses, add expense. */
+/** Group detail page — members, splits, balances, expenses, add expense. */
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -6,15 +6,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api } from '@/lib/api'
-import type { GroupDetail as GroupDetailType, ExpenseItem, CreateExpenseSplit } from '@/lib/types'
+import type { GroupDetail as GroupDetailType, ExpenseItem, CreateExpenseSplit, BalancesResponse } from '@/lib/types'
 import { getUserInfo } from '@/lib/auth'
-import { UserPlus, ArrowLeft, Plus, Receipt } from 'lucide-react'
+import { UserPlus, ArrowLeft, Plus, Receipt, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react'
 
 export default function GroupDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [group, setGroup] = useState<GroupDetailType | null>(null)
   const [expenses, setExpenses] = useState<ExpenseItem[]>([])
+  const [balances, setBalances] = useState<BalancesResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [showAddMember, setShowAddMember] = useState(false)
   const [memberEmail, setMemberEmail] = useState('')
@@ -46,12 +47,14 @@ export default function GroupDetail() {
   const loadGroup = useCallback(async () => {
     if (!id) return
     try {
-      const [g, exps] = await Promise.all([
+      const [g, exps, bals] = await Promise.all([
         api.groups.get(id),
         api.expenses.list(id),
+        api.balances.get(id),
       ])
       applyGroup(g)
       setExpenses(exps)
+      setBalances(bals)
       if (g.members.length > 0 && !expPaidBy) {
         setExpPaidBy(currentUser?.id ?? g.members[0]?.user_id ?? '')
       }
@@ -128,8 +131,12 @@ export default function GroupDetail() {
           .map(([uid, v]) => ({ user_id: uid, amount: parseFloat(v) }))
       }
       await api.expenses.create(id, data)
-      const exps = await api.expenses.list(id)
+      const [exps, bals] = await Promise.all([
+        api.expenses.list(id),
+        api.balances.get(id),
+      ])
       setExpenses(exps)
+      setBalances(bals)
       setShowAddExpense(false)
       setExpDesc('')
       setExpAmount('')
@@ -252,6 +259,48 @@ export default function GroupDetail() {
           </Button>
         )}
       </div>
+
+      {/* Balances */}
+      {balances && (balances.balances.some(b => Math.abs(b.balance) > 0.01)) && (
+        <div className="mb-6">
+          <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">
+            Balances
+          </h2>
+          <div className="space-y-1 mb-3">
+            {balances.balances
+              .filter(b => Math.abs(b.balance) > 0.01)
+              .sort((a, b) => b.balance - a.balance)
+              .map((b) => (
+              <div key={b.user_id} className="flex items-center justify-between p-2 rounded-lg border border-gray-800 bg-gray-900">
+                <div className="flex items-center gap-2">
+                  {b.balance > 0 ? (
+                    <TrendingUp className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <TrendingDown className="w-4 h-4 text-red-400" />
+                  )}
+                  <span className="text-sm text-white">{b.name}</span>
+                </div>
+                <span className={`text-sm font-medium ${b.balance > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {b.balance > 0 ? '+' : ''}£{b.balance.toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
+          {balances.simplified_debts.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs text-gray-500 mb-1">Simplified transfers:</p>
+              {balances.simplified_debts.map((d, i) => (
+                <div key={i} className="flex items-center gap-2 p-2 rounded-lg border border-gray-800 bg-gray-900/50 text-sm">
+                  <span className="text-red-400">{d.from_name}</span>
+                  <ArrowRight className="w-3 h-3 text-gray-500" />
+                  <span className="text-green-400">{d.to_name}</span>
+                  <span className="ml-auto text-white font-medium">£{d.amount.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Expenses */}
       <div>

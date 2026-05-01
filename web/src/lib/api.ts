@@ -39,7 +39,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-import type { CreateExpenseSplit, ExpenseItem, GroupDetail, GroupListItem, UserSearchResult } from './types'
+import type { BalancesResponse, CreateExpenseSplit, ExpenseItem, GroupDetail, GroupListItem, UserSearchResult } from './types'
 
 export const api = {
   auth: {
@@ -73,6 +73,10 @@ export const api = {
         method: 'PUT',
         body: JSON.stringify({ splits }),
       }),
+  },
+  balances: {
+    get: (groupId: string) =>
+      request<BalancesResponse>(`/api/groups/${groupId}/balances`),
   },
   expenses: {
     list: (groupId: string) =>

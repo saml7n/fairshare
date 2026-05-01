@@ -85,3 +85,21 @@ class ExpenseSplit(SQLModel, table=True):
     expense_id: UUID = Field(foreign_key="expenses.id")
     user_id: UUID = Field(foreign_key="users.id")
     amount: float = Field(default=0.0)
+
+
+# ---------------------------------------------------------------------------
+# Payment (Story 6 model, created here for Story 5 balance calculations)
+# ---------------------------------------------------------------------------
+
+class Payment(SQLModel, table=True):
+    """A manual payment from one user to another within a group."""
+
+    __tablename__ = "payments"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    group_id: UUID = Field(foreign_key="groups.id")
+    from_user: UUID = Field(foreign_key="users.id")
+    to_user: UUID = Field(foreign_key="users.id")
+    amount: float = Field(default=0.0)
+    created_by: UUID = Field(foreign_key="users.id")
+    created_at: datetime = Field(default_factory=_utcnow)

@@ -257,14 +257,14 @@ As a **user**, I want **to record an expense and specify how it's split**, so th
 As a **user**, I want **to see how much I owe or am owed, with the minimum number of transfers needed to settle up**, so that **settling debts is simple and efficient**.
 
 ### Acceptance criteria
-- [ ] Backend algorithm (`app/api/balances.py`):
+- [x] Backend algorithm (`app/api/balances.py`):
   - Computes net balance per member: sum of (expenses they paid) minus sum of (their share of all expenses) plus/minus payments.
   - Positive balance = owed money by others. Negative balance = owes money to others.
   - **Graph minimisation**: given N members with various net balances, compute the minimum set of transfers to settle all debts. Uses greedy algorithm: repeatedly match largest debtor with largest creditor.
   - Payments (from Story 6) are factored into net balance calculation.
-- [ ] API endpoint:
+- [x] API endpoint:
   - `GET /api/groups/:id/balances` — returns `{balances: [{user_id, name, email, balance}], simplified_debts: [{from_user_id, from_name, to_user_id, to_name, amount}]}`.
-- [ ] Web:
+- [x] Web:
   - "Balances" tab/section on the group detail page.
   - Shows each member's net balance (green if positive/owed, red if negative/owes).
   - Shows the simplified debts list: "Alice owes Bob £30", "Charlie owes Bob £15".
@@ -291,6 +291,13 @@ As a **user**, I want **to see how much I owe or am owed, with the minimum numbe
 
 ### Blocked until answered
 - None.
+
+### Completion
+- Unit tests: 36 passed (9 balance tests including pure function + API)
+- Web build: succeeds
+- QA: Alice +£145, Bob -£145, simplified "Bob → Alice £145" — PASS
+- Balances section renders with green/red colour coding and arrow notation — PASS
+- Payment model added (for Story 6 integration)
 
 ---
 

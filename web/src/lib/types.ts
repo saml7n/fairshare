@@ -50,3 +50,23 @@ export interface CreateExpenseSplit {
   user_id: string
   amount: number
 }
+
+export interface MemberBalance {
+  user_id: string
+  name: string
+  email: string
+  balance: number
+}
+
+export interface SimplifiedDebt {
+  from_user_id: string
+  from_name: string
+  to_user_id: string
+  to_name: string
+  amount: number
+}
+
+export interface BalancesResponse {
+  balances: MemberBalance[]
+  simplified_debts: SimplifiedDebt[]
+}
