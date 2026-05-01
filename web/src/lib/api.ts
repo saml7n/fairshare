@@ -16,7 +16,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers })
 
-  if (res.status === 401 || res.status === 403) {
+  if (res.status === 401) {
     const isAuthEndpoint = path.startsWith('/api/auth/')
     if (!isAuthEndpoint) {
       const { clearToken } = await import('./auth')
@@ -39,7 +39,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-import type { GroupDetail, GroupListItem, UserSearchResult } from './types'
+import type { CreateExpenseSplit, ExpenseItem, GroupDetail, GroupListItem, UserSearchResult } from './types'
 
 export const api = {
   auth: {
@@ -72,6 +72,20 @@ export const api = {
       request<GroupDetail>(`/api/groups/${groupId}/splits`, {
         method: 'PUT',
         body: JSON.stringify({ splits }),
+      }),
+  },
+  expenses: {
+    list: (groupId: string) =>
+      request<ExpenseItem[]>(`/api/groups/${groupId}/expenses`),
+    create: (groupId: string, data: {
+      description: string
+      amount: number
+      paid_by: string
+      splits?: CreateExpenseSplit[]
+    }) =>
+      request<ExpenseItem>(`/api/groups/${groupId}/expenses`, {
+        method: 'POST',
+        body: JSON.stringify(data),
       }),
   },
   users: {

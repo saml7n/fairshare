@@ -214,13 +214,13 @@ As a **user**, I want **to create expense groups and add other registered users*
 As a **user**, I want **to record an expense and specify how it's split**, so that **the group knows who paid for what and who owes whom**.
 
 ### Acceptance criteria
-- [ ] Database models:
+- [x] Database models:
   - `Expense` table: `id` (UUID), `group_id` (FK→groups), `description`, `amount`, `paid_by` (FK→users), `created_by` (FK→users), `created_at`.
   - `ExpenseSplit` table: `id` (UUID), `expense_id` (FK→expenses), `user_id` (FK→users), `amount`.
-- [ ] API endpoints:
+- [x] API endpoints:
   - `GET /api/groups/:id/expenses` — list expenses for a group (newest first). Each expense includes split details with user names.
   - `POST /api/groups/:id/expenses` — create expense with `{description, amount, paid_by, splits?}`. If `splits` is omitted, uses the group's default split percentages. If provided, validates split amounts sum to the expense amount (within ±0.01 tolerance).
-- [ ] Web:
+- [x] Web:
   - Expense list on the group detail page showing description, amount, payer, and date.
   - "Add Expense" form: description, amount, who paid (dropdown of group members), split method (equal using defaults, or custom per-person amounts).
   - Custom split UI: shows each member with an amount input, live total validation.
@@ -240,6 +240,15 @@ As a **user**, I want **to record an expense and specify how it's split**, so th
 
 ### Blocked until answered
 - None.
+
+### Completion
+- Unit tests: 27 passed (6 expense tests + previous 21)
+- Web build: succeeds
+- QA1: Hotel £450 paid by Alice, default split → Alice £225, Bob £225 — PASS
+- QA2: Dinner £120 paid by Bob, custom split → Alice £80, Bob £40 — PASS
+- QA3: Both expenses shown newest first — PASS
+- QA4: Custom split UI with live total validation — PASS
+- Bug fix: 403 response no longer clears auth token (only 401 does)
 
 ---
 

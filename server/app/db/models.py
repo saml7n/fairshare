@@ -56,3 +56,32 @@ class GroupMember(SQLModel, table=True):
     user_id: UUID = Field(foreign_key="users.id")
     default_split_percent: float = Field(default=0.0)
     joined_at: datetime = Field(default_factory=_utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Expense + ExpenseSplit (Story 4)
+# ---------------------------------------------------------------------------
+
+class Expense(SQLModel, table=True):
+    """An expense recorded in a group."""
+
+    __tablename__ = "expenses"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    group_id: UUID = Field(foreign_key="groups.id")
+    description: str = Field(default="")
+    amount: float = Field(default=0.0)
+    paid_by: UUID = Field(foreign_key="users.id")
+    created_by: UUID = Field(foreign_key="users.id")
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class ExpenseSplit(SQLModel, table=True):
+    """How an expense is split among group members."""
+
+    __tablename__ = "expense_splits"
+
+    id: UUID = Field(default_factory=uuid4, primary_key=True)
+    expense_id: UUID = Field(foreign_key="expenses.id")
+    user_id: UUID = Field(foreign_key="users.id")
+    amount: float = Field(default=0.0)

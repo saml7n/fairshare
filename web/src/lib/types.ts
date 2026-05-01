@@ -28,3 +28,25 @@ export interface UserSearchResult {
   email: string
   name: string
 }
+
+export interface ExpenseSplit {
+  user_id: string
+  user_name: string
+  user_email: string
+  amount: number
+}
+
+export interface ExpenseItem {
+  id: string
+  description: string
+  amount: number
+  paid_by: string
+  paid_by_name: string
+  splits: ExpenseSplit[]
+  created_at: string
+}
+
+export interface CreateExpenseSplit {
+  user_id: string
+  amount: number
+}
