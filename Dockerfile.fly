@@ -23,12 +23,12 @@ RUN apt-get update && \
 # Install uv for Python dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy Python dependency files first for layer caching
-COPY server/pyproject.toml ./
+# Copy Python project files and install dependencies
+COPY server/pyproject.toml server/uv.lock* ./
 RUN uv sync --no-dev --no-install-project
 
 # Copy server application code
-COPY server/ .
+COPY server/app/ ./app/
 
 # Copy built web assets
 COPY --from=web-build /app/dist /usr/share/nginx/html

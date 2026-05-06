@@ -14,7 +14,9 @@ from app.api.groups import router as groups_router
 from app.api.payments import router as payments_router
 from app.api.users import router as users_router
 from app.auth import ensure_admin_user, init_auth
+from app.config import settings
 from app.db.session import get_session, init_db
+from app.seed import seed_demo_data
 from app.logging import setup_logging
 
 setup_logging()
@@ -29,6 +31,9 @@ async def lifespan(app: FastAPI):
 
     session = next(get_session())
     ensure_admin_user(session)
+
+    if settings.seed_demo:
+        seed_demo_data(session)
 
     logger.info("app_started")
     yield
