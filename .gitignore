@@ -18,6 +18,9 @@ dist/
 .vscode/
 .idea/
 
+# Playwright browser test artifacts
+.playwright-mcp/
+
 # OS
 .DS_Store
 Thumbs.db

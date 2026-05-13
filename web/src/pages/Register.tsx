@@ -12,18 +12,19 @@ export default function Register() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!email.trim() || !password || !name.trim()) return
+    if (!email.trim() || !password || !name.trim() || !inviteCode.trim()) return
 
     try {
       setLoading(true)
       setError(null)
-      const res = await api.auth.register(email.trim(), password, name.trim())
+      const res = await api.auth.register(email.trim(), password, name.trim(), inviteCode.trim())
       setToken(res.token)
       navigate('/')
     } catch (err) {
@@ -31,7 +32,11 @@ export default function Register() {
       if (msg.includes('409')) {
         setError('Email already registered')
       } else if (msg.includes('400')) {
-        setError('Password must be at least 6 characters')
+        setError('Password must be at least 8 characters')
+      } else if (msg.includes('403')) {
+        setError('Invalid invite code')
+      } else if (msg.includes('429')) {
+        setError('Too many attempts — please try again later')
       } else {
         setError('Registration failed — please try again')
       }
@@ -81,9 +86,21 @@ export default function Register() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
+              placeholder="At least 8 characters"
               autoComplete="new-password"
               data-testid="register-password"
+            />
+          </div>
+          <div>
+            <Label htmlFor="invite-code">Invite Code</Label>
+            <Input
+              id="invite-code"
+              type="password"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              placeholder="Enter the invite code"
+              autoComplete="off"
+              data-testid="register-invite-code"
             />
           </div>
 
@@ -91,7 +108,7 @@ export default function Register() {
 
           <Button
             type="submit"
-            disabled={loading || !email.trim() || !password || !name.trim()}
+            disabled={loading || !email.trim() || !password || !name.trim() || !inviteCode.trim()}
             className="w-full"
             data-testid="register-submit"
           >

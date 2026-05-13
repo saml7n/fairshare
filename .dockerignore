@@ -1,0 +1,32 @@
+# Version control
+.git/
+.gitignore
+
+# Dependencies (reinstalled inside the image)
+node_modules/
+server/.venv/
+
+# Dev build output (rebuilt inside the image)
+web/dist/
+
+# Local databases and secrets
+*.db
+.env
+.env.local
+.env.secrets
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Test files
+server/tests/
+web/src/**/__tests__/
+
+# Docs and tooling
+docs/
+.vscode/
+.idea/
+*.md

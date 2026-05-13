@@ -73,6 +73,7 @@ class Expense(SQLModel, table=True):
     amount: float = Field(default=0.0)
     paid_by: UUID = Field(foreign_key="users.id")
     created_by: UUID = Field(foreign_key="users.id")
+    used_default_split: bool = Field(default=True)
     created_at: datetime = Field(default_factory=_utcnow)
 
 

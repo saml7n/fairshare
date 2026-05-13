@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, EmailStr, Field
 from sqlmodel import Session, select
 
 from app.auth import create_jwt, get_current_user, hash_password, verify_password
+from app.config import settings
 from app.db.models import User
 from app.db.session import get_session
+from app.limiter import limiter
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -17,13 +19,14 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str
-    name: str = ""
+    password: str = Field(..., min_length=8, max_length=128)
+    name: str = Field("", max_length=100)
+    invite_code: str = Field("", max_length=200)
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
+    email: str = Field(..., max_length=254)
+    password: str = Field(..., max_length=128)
 
 
 class AuthResponse(BaseModel):
@@ -39,19 +42,27 @@ class UserResponse(BaseModel):
 
 
 @router.post("/register", response_model=AuthResponse)
-def register(body: RegisterRequest, session: Session = Depends(get_session)) -> AuthResponse:
+@limiter.limit("5/hour")
+def register(request: Request, body: RegisterRequest, session: Session = Depends(get_session)) -> AuthResponse:
     """Register a new user account."""
-    existing = session.exec(select(User).where(User.email == body.email)).first()
+    expected = settings.registration_invite_code
+    if not expected:
+        raise HTTPException(status_code=403, detail="Registration is currently closed")
+    if body.invite_code != expected:
+        raise HTTPException(status_code=403, detail="Invalid invite code")
+
+    normalized_email = body.email.strip().lower()
+    existing = session.exec(select(User).where(User.email == normalized_email)).first()
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
 
-    if len(body.password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
     user = User(
-        email=body.email,
+        email=normalized_email,
         password_hash=hash_password(body.password),
-        name=body.name or body.email.split("@")[0],
+        name=body.name.strip() or normalized_email.split("@")[0],
     )
     session.add(user)
     session.commit()
@@ -68,9 +79,10 @@ def register(body: RegisterRequest, session: Session = Depends(get_session)) -> 
 
 
 @router.post("/login", response_model=AuthResponse)
-def login(body: LoginRequest, session: Session = Depends(get_session)) -> AuthResponse:
+@limiter.limit("10/minute")
+def login(request: Request, body: LoginRequest, session: Session = Depends(get_session)) -> AuthResponse:
     """Log in with email and password."""
-    user = session.exec(select(User).where(User.email == body.email)).first()
+    user = session.exec(select(User).where(User.email == body.email.strip().lower())).first()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 

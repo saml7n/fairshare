@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -20,6 +20,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import get_session
+from app.limiter import limiter
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -44,7 +45,9 @@ class DashboardResponse(BaseModel):
 
 
 @router.get("", response_model=DashboardResponse)
+@limiter.limit("30/minute")
 def get_dashboard(
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> DashboardResponse:
@@ -78,12 +81,9 @@ def get_dashboard(
                 )
             ).all())
 
-        try:
-            payments = list(session.exec(
-                select(Payment).where(Payment.group_id == group.id)
-            ).all())
-        except Exception:
-            payments = []
+        payments = list(session.exec(
+            select(Payment).where(Payment.group_id == group.id)
+        ).all())
 
         net = compute_net_balances(expenses, splits, payments)
         my_balance = round(net.get(user.id, 0.0), 2)

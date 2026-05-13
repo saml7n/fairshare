@@ -17,19 +17,23 @@ export default function GroupDetail() {
   const [expenses, setExpenses] = useState<ExpenseItem[]>([])
   const [balances, setBalances] = useState<BalancesResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [showAddMember, setShowAddMember] = useState(false)
   const [memberEmail, setMemberEmail] = useState('')
   const [addError, setAddError] = useState<string | null>(null)
   const [editingSplits, setEditingSplits] = useState(false)
   const [splitValues, setSplitValues] = useState<Record<string, string>>({})
   const [splitError, setSplitError] = useState<string | null>(null)
-
+  const [splitRetroactive, setSplitRetroactive] = useState(false)
+  const [splitUpdateCount, setSplitUpdateCount] = useState<number | null>(null)
   const [showAddExpense, setShowAddExpense] = useState(false)
   const [expDesc, setExpDesc] = useState('')
   const [expAmount, setExpAmount] = useState('')
   const [expPaidBy, setExpPaidBy] = useState('')
   const [expSplitMode, setExpSplitMode] = useState<'default' | 'custom'>('default')
   const [expCustomSplits, setExpCustomSplits] = useState<Record<string, string>>({})
+  const [expExcluded, setExpExcluded] = useState<Set<string>>(new Set())
+  const [expSplitUnit, setExpSplitUnit] = useState<'amount' | 'percent'>('amount')
   const [expError, setExpError] = useState<string | null>(null)
   const [expLoading, setExpLoading] = useState(false)
 
@@ -55,6 +59,7 @@ export default function GroupDetail() {
   const loadGroup = useCallback(async () => {
     if (!id) return
     try {
+      setLoadError(null)
       const [g, exps, bals, pmts] = await Promise.all([
         api.groups.get(id),
         api.expenses.list(id),
@@ -67,6 +72,15 @@ export default function GroupDetail() {
       setPayments(pmts)
       if (g.members.length > 0 && !expPaidBy) {
         setExpPaidBy(currentUser?.id ?? g.members[0]?.user_id ?? '')
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load group'
+      if (msg.includes('403')) {
+        setLoadError('You are not a member of this group')
+      } else if (msg.includes('404')) {
+        setLoadError('Group not found')
+      } else {
+        setLoadError('Failed to load group')
       }
     } finally {
       setLoading(false)
@@ -106,9 +120,20 @@ export default function GroupDetail() {
     }
     try {
       setSplitError(null)
-      const g = await api.groups.updateSplits(id, splits)
-      applyGroup(g)
+      const result = await api.groups.updateSplits(id, splits, splitRetroactive)
+      applyGroup(result)
       setEditingSplits(false)
+      setSplitRetroactive(false)
+      if (result.updated_expenses > 0) {
+        setSplitUpdateCount(result.updated_expenses)
+        setTimeout(() => setSplitUpdateCount(null), 4000)
+        const [exps, bals] = await Promise.all([
+          api.expenses.list(id),
+          api.balances.get(id),
+        ])
+        setExpenses(exps)
+        setBalances(bals)
+      }
     } catch {
       setSplitError('Failed to update splits')
     }
@@ -136,9 +161,23 @@ export default function GroupDetail() {
         paid_by: expPaidBy,
       }
       if (expSplitMode === 'custom') {
-        data.splits = Object.entries(expCustomSplits)
-          .filter(([, v]) => parseFloat(v) > 0)
-          .map(([uid, v]) => ({ user_id: uid, amount: parseFloat(v) }))
+        if (expSplitUnit === 'percent') {
+          if (Math.abs(customSplitTotal - 100) > 0.1) {
+            setExpError('Percentages must sum to 100%')
+            setExpLoading(false)
+            return
+          }
+          data.splits = Object.entries(expCustomSplits)
+            .map(([uid, v]) => ({
+              user_id: uid,
+              amount: Math.round(parseFloat(v) / 100 * amount * 100) / 100,
+            }))
+            .filter(s => s.amount > 0)
+        } else {
+          data.splits = Object.entries(expCustomSplits)
+            .filter(([, v]) => parseFloat(v) > 0)
+            .map(([uid, v]) => ({ user_id: uid, amount: parseFloat(v) }))
+        }
       }
       await api.expenses.create(id, data)
       const [exps, bals, pmts] = await Promise.all([
@@ -154,6 +193,8 @@ export default function GroupDetail() {
       setExpAmount('')
       setExpSplitMode('default')
       setExpCustomSplits({})
+      setExpExcluded(new Set())
+      setExpSplitUnit('amount')
     } catch (err) {
       setExpError(err instanceof Error ? err.message : 'Failed to create expense')
     } finally {
@@ -169,6 +210,49 @@ export default function GroupDetail() {
       sv[m.user_id] = String(Math.round(amount * m.default_split_percent / 100 * 100) / 100)
     }
     setExpCustomSplits(sv)
+    setExpExcluded(new Set())
+    setExpSplitUnit('amount')
+  }
+
+  const toggleMemberExclusion = (userId: string) => {
+    if (!group) return
+    const newExcluded = new Set(expExcluded)
+    if (newExcluded.has(userId)) {
+      newExcluded.delete(userId)
+    } else {
+      newExcluded.add(userId)
+    }
+    const includedMembers = group.members.filter(m => !newExcluded.has(m.user_id))
+    const totalPct = includedMembers.reduce((sum, m) => sum + m.default_split_percent, 0)
+    const amount = parseFloat(expAmount) || 0
+    const sv: Record<string, string> = {}
+    for (const m of includedMembers) {
+      const share = totalPct > 0 ? m.default_split_percent / totalPct : 1 / includedMembers.length
+      if (expSplitUnit === 'percent') {
+        sv[m.user_id] = String(Math.round(share * 1000) / 10)
+      } else {
+        sv[m.user_id] = String(Math.round(amount * share * 100) / 100)
+      }
+    }
+    setExpCustomSplits(sv)
+    setExpExcluded(newExcluded)
+  }
+
+  const switchSplitUnit = (newUnit: 'amount' | 'percent') => {
+    if (newUnit === expSplitUnit || !group) return
+    const amount = parseFloat(expAmount) || 0
+    const sv: Record<string, string> = {}
+    for (const m of group.members) {
+      if (expExcluded.has(m.user_id)) continue
+      const currentVal = parseFloat(expCustomSplits[m.user_id] ?? '0') || 0
+      if (newUnit === 'percent') {
+        sv[m.user_id] = amount > 0 ? String(Math.round(currentVal / amount * 1000) / 10) : '0'
+      } else {
+        sv[m.user_id] = String(Math.round(currentVal / 100 * amount * 100) / 100)
+      }
+    }
+    setExpCustomSplits(sv)
+    setExpSplitUnit(newUnit)
   }
 
   const handleSettle = async (e: FormEvent) => {
@@ -204,6 +288,10 @@ export default function GroupDetail() {
 
   if (loading) {
     return <p className="text-gray-500 text-center py-12">Loading…</p>
+  }
+
+  if (loadError) {
+    return <p className="text-red-400 text-center py-12">{loadError}</p>
   }
 
   if (!group) {
@@ -288,12 +376,25 @@ export default function GroupDetail() {
             <p className={`text-xs ${Math.abs(splitTotal - 100) > 0.1 ? 'text-red-400' : 'text-gray-500'}`}>
               Total: {splitTotal.toFixed(1)}%
             </p>
+            <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={splitRetroactive}
+                onChange={(e) => setSplitRetroactive(e.target.checked)}
+                className="accent-indigo-500"
+              />
+              Also update past expenses that used the default split
+            </label>
             {splitError && <p className="text-red-400 text-xs">{splitError}</p>}
             <div className="flex gap-2">
               <Button size="sm" onClick={handleSaveSplits}>Save</Button>
-              <Button size="sm" variant="outline" onClick={() => setEditingSplits(false)}>Cancel</Button>
+              <Button size="sm" variant="outline" onClick={() => { setEditingSplits(false); setSplitRetroactive(false) }}>Cancel</Button>
             </div>
           </div>
+        )}
+
+        {splitUpdateCount !== null && (
+          <p className="text-green-400 text-xs mt-2">{splitUpdateCount} expense(s) updated.</p>
         )}
 
         {!editingSplits && group.members.length > 1 && (
@@ -324,7 +425,7 @@ export default function GroupDetail() {
                   <span className="text-sm text-white">{b.name}</span>
                 </div>
                 <span className={`text-sm font-medium ${b.balance > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {b.balance > 0 ? '+' : ''}£{b.balance.toFixed(2)}
+                  {b.balance > 0 ? `+£${b.balance.toFixed(2)}` : `-£${Math.abs(b.balance).toFixed(2)}`}
                 </span>
               </div>
             ))}
@@ -463,24 +564,28 @@ export default function GroupDetail() {
             </div>
             <div>
               <Label>Amount</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={expAmount}
-                onChange={(e) => {
-                  setExpAmount(e.target.value)
-                  if (expSplitMode === 'custom') {
-                    const amt = parseFloat(e.target.value) || 0
-                    const sv: Record<string, string> = {}
-                    for (const m of group.members) {
-                      sv[m.user_id] = String(Math.round(amt * m.default_split_percent / 100 * 100) / 100)
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">£</span>
+                <Input
+                  className="pl-6"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={expAmount}
+                  onChange={(e) => {
+                    setExpAmount(e.target.value)
+                    if (expSplitMode === 'custom') {
+                      const amt = parseFloat(e.target.value) || 0
+                      const sv: Record<string, string> = {}
+                      for (const m of group.members) {
+                        sv[m.user_id] = String(Math.round(amt * m.default_split_percent / 100 * 100) / 100)
+                      }
+                      setExpCustomSplits(sv)
                     }
-                    setExpCustomSplits(sv)
-                  }
-                }}
-                placeholder="0.00"
-              />
+                  }}
+                  placeholder="0.00"
+                />
+              </div>
             </div>
             <div>
               <Label>Paid by</Label>
@@ -518,32 +623,69 @@ export default function GroupDetail() {
               </div>
             </div>
             {expSplitMode === 'custom' && (
-              <div className="space-y-1">
-                {group.members.map((m) => (
-                  <div key={m.user_id} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-300">{m.name}</span>
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-500 text-sm">£</span>
-                      <Input
-                        className="w-24 text-right text-sm"
-                        type="number"
-                        step="0.01"
-                        value={expCustomSplits[m.user_id] ?? ''}
-                        onChange={(e) =>
-                          setExpCustomSplits((prev) => ({ ...prev, [m.user_id]: e.target.value }))
-                        }
-                      />
+              <div className="space-y-2">
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={expSplitUnit === 'amount' ? 'default' : 'outline'}
+                    onClick={() => switchSplitUnit('amount')}
+                  >£</Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={expSplitUnit === 'percent' ? 'default' : 'outline'}
+                    onClick={() => switchSplitUnit('percent')}
+                  >%</Button>
+                </div>
+                {group.members.map((m) => {
+                  const excluded = expExcluded.has(m.user_id)
+                  return (
+                    <div key={m.user_id} className={`flex items-center justify-between ${excluded ? 'opacity-40' : ''}`}>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={!excluded}
+                          onChange={() => toggleMemberExclusion(m.user_id)}
+                          className="accent-indigo-500 cursor-pointer"
+                        />
+                        <span className="text-sm text-gray-300">{m.name}</span>
+                      </div>
+                      {!excluded && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-500 text-sm">{expSplitUnit === 'amount' ? '£' : '%'}</span>
+                          <Input
+                            className="w-24 text-right text-sm"
+                            type="number"
+                            step={expSplitUnit === 'amount' ? '0.01' : '0.1'}
+                            min="0"
+                            value={expCustomSplits[m.user_id] ?? ''}
+                            onChange={(e) =>
+                              setExpCustomSplits((prev) => ({ ...prev, [m.user_id]: e.target.value }))
+                            }
+                          />
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
-                <p className={`text-xs ${Math.abs(customSplitTotal - (parseFloat(expAmount) || 0)) > 0.01 ? 'text-red-400' : 'text-gray-500'}`}>
-                  Total: £{customSplitTotal.toFixed(2)} / £{(parseFloat(expAmount) || 0).toFixed(2)}
-                </p>
+                  )
+                })}
+                {expSplitUnit === 'percent' ? (
+                  <p className={`text-xs ${Math.abs(customSplitTotal - 100) > 0.1 ? 'text-red-400' : 'text-gray-500'}`}>
+                    Total: {customSplitTotal.toFixed(1)}% / 100%
+                  </p>
+                ) : (
+                  <p className={`text-xs ${Math.abs(customSplitTotal - (parseFloat(expAmount) || 0)) > 0.01 ? 'text-red-400' : 'text-gray-500'}`}>
+                    Total: £{customSplitTotal.toFixed(2)} / £{(parseFloat(expAmount) || 0).toFixed(2)}
+                  </p>
+                )}
               </div>
             )}
             {expError && <p className="text-red-400 text-xs">{expError}</p>}
             <div className="flex gap-2">
-              <Button type="submit" size="sm" disabled={expLoading || !expDesc.trim() || !expAmount}>
+              <Button type="submit" size="sm" disabled={
+                expLoading || !expDesc.trim() || !expAmount ||
+                (expSplitMode === 'custom' && expSplitUnit === 'percent' && Math.abs(customSplitTotal - 100) > 0.1)
+              }>
                 {expLoading ? 'Saving…' : 'Add Expense'}
               </Button>
               <Button type="button" size="sm" variant="outline" onClick={() => setShowAddExpense(false)}>

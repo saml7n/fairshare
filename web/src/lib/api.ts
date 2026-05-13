@@ -39,14 +39,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-import type { BalancesResponse, CreateExpenseSplit, DashboardData, ExpenseItem, GroupDetail, GroupListItem, PaymentItem, UserSearchResult } from './types'
+import type { BalancesResponse, CreateExpenseSplit, DashboardData, ExpenseItem, GroupDetail, GroupListItem, PaymentItem, UpdateSplitsResponse, UserSearchResult } from './types'
 
 export const api = {
   auth: {
-    register: (email: string, password: string, name: string) =>
+    register: (email: string, password: string, name: string, inviteCode: string) =>
       request<{ ok: boolean; token: string; user: { id: string; email: string; name: string } | null }>('/api/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ email, password, name }),
+        body: JSON.stringify({ email, password, name, invite_code: inviteCode }),
       }),
     login: (email: string, password: string) =>
       request<{ ok: boolean; token: string; user: { id: string; email: string; name: string } | null }>('/api/auth/login', {
@@ -68,10 +68,10 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ email }),
       }),
-    updateSplits: (groupId: string, splits: Record<string, number>) =>
-      request<GroupDetail>(`/api/groups/${groupId}/splits`, {
+    updateSplits: (groupId: string, splits: Record<string, number>, retroactive = false) =>
+      request<UpdateSplitsResponse>(`/api/groups/${groupId}/splits`, {
         method: 'PUT',
-        body: JSON.stringify({ splits }),
+        body: JSON.stringify({ splits, retroactive }),
       }),
   },
   dashboard: {

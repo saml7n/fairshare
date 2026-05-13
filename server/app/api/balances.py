@@ -6,7 +6,7 @@ from collections import defaultdict
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -20,6 +20,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import get_session
+from app.limiter import limiter
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/groups/{group_id}/balances", tags=["balances"])
@@ -124,8 +125,10 @@ def minimise_transfers(balances: dict[UUID, float]) -> list[tuple[UUID, UUID, fl
 
 
 @router.get("", response_model=BalancesResponse)
+@limiter.limit("60/minute")
 def get_balances(
     group_id: UUID,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> BalancesResponse:
@@ -157,12 +160,9 @@ def get_balances(
             select(ExpenseSplit).where(ExpenseSplit.expense_id.in_(expense_ids))  # type: ignore[union-attr]
         ).all())
 
-    try:
-        payments = list(session.exec(
-            select(Payment).where(Payment.group_id == group_id)
-        ).all())
-    except Exception:
-        payments = []
+    payments = list(session.exec(
+        select(Payment).where(Payment.group_id == group_id)
+    ).all())
 
     net = compute_net_balances(expenses, splits, payments)
 

@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./fairshare.db"
     port: int = 3000
     seed_demo: bool = False
+    allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080"
+    # Invite code required at registration. Empty string = registration disabled.
+    registration_invite_code: str = ""
 
     model_config = {
         "env_file": ("../.env", "../.env.local"),

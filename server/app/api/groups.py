@@ -5,13 +5,14 @@ from __future__ import annotations
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.auth import get_current_user
-from app.db.models import Group, GroupMember, User
+from app.db.models import Expense, ExpenseSplit, Group, GroupMember, User
 from app.db.session import get_session
+from app.limiter import limiter
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/groups", tags=["groups"])
@@ -20,20 +21,32 @@ router = APIRouter(prefix="/api/groups", tags=["groups"])
 class CreateGroupRequest(BaseModel):
     """Request body for creating a group."""
 
-    name: str
-    member_emails: list[str] = []
+    name: str = Field(..., min_length=1, max_length=100)
+    member_emails: list[str] = Field(default=[], max_length=50)
 
 
 class AddMemberRequest(BaseModel):
     """Request body for adding a member by email."""
 
-    email: str
+    email: str = Field(..., max_length=254)
 
 
 class UpdateSplitsRequest(BaseModel):
     """Request body for updating split percentages."""
 
-    splits: dict[str, float]
+    splits: dict[str, float] = Field(default_factory=dict)
+    retroactive: bool = False
+
+
+class UpdateSplitsResponse(BaseModel):
+    """Response for the update-splits endpoint."""
+
+    id: str
+    name: str
+    created_by: str
+    members: list  # list[MemberResponse] — forward ref resolved at runtime
+    created_at: str
+    updated_expenses: int = 0
 
 
 class MemberResponse(BaseModel):
@@ -93,7 +106,9 @@ def _build_group_response(group: Group, session: Session) -> GroupResponse:
 
 
 @router.get("", response_model=list[GroupListItem])
+@limiter.limit("60/minute")
 def list_groups(
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[GroupListItem]:
@@ -122,7 +137,9 @@ def list_groups(
 
 
 @router.post("", response_model=GroupResponse)
+@limiter.limit("20/minute")
 def create_group(
+    request: Request,
     body: CreateGroupRequest,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -158,8 +175,10 @@ def create_group(
 
 
 @router.get("/{group_id}", response_model=GroupResponse)
+@limiter.limit("60/minute")
 def get_group(
     group_id: UUID,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> GroupResponse:
@@ -181,8 +200,10 @@ def get_group(
 
 
 @router.post("/{group_id}/members", response_model=GroupResponse)
+@limiter.limit("20/minute")
 def add_member(
     group_id: UUID,
+    request: Request,
     body: AddMemberRequest,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -234,13 +255,15 @@ def add_member(
     return _build_group_response(group, session)
 
 
-@router.put("/{group_id}/splits", response_model=GroupResponse)
+@router.put("/{group_id}/splits", response_model=UpdateSplitsResponse)
+@limiter.limit("20/minute")
 def update_splits(
     group_id: UUID,
+    request: Request,
     body: UpdateSplitsRequest,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
-) -> GroupResponse:
+) -> UpdateSplitsResponse:
     """Update default split percentages for a group."""
     group = session.get(Group, group_id)
     if not group:
@@ -260,6 +283,18 @@ def update_splits(
         raise HTTPException(status_code=400, detail=f"Splits must sum to 100% (got {total}%)")
 
     for user_id_str, pct in body.splits.items():
+        if not (0.0 <= pct <= 100.0):
+            raise HTTPException(status_code=400, detail=f"Each split must be between 0 and 100% (got {pct}%)")
+
+    member_ids = {
+        str(gm.user_id)
+        for gm in session.exec(select(GroupMember).where(GroupMember.group_id == group_id)).all()
+    }
+    for user_id_str in body.splits:
+        if user_id_str not in member_ids:
+            raise HTTPException(status_code=400, detail=f"User {user_id_str} is not a member of this group")
+
+    for user_id_str, pct in body.splits.items():
         gm = session.exec(
             select(GroupMember).where(
                 GroupMember.group_id == group_id,
@@ -270,6 +305,37 @@ def update_splits(
             gm.default_split_percent = pct
             session.add(gm)
 
+    updated_expenses = 0
+    if body.retroactive:
+        expenses_to_update = session.exec(
+            select(Expense).where(
+                Expense.group_id == group_id,
+                Expense.used_default_split == True,  # noqa: E712
+            )
+        ).all()
+        new_pcts = {UUID(uid): pct for uid, pct in body.splits.items()}
+        for expense in expenses_to_update:
+            old_splits = session.exec(
+                select(ExpenseSplit).where(ExpenseSplit.expense_id == expense.id)
+            ).all()
+            for s in old_splits:
+                session.delete(s)
+            for uid, pct in new_pcts.items():
+                session.add(ExpenseSplit(
+                    expense_id=expense.id,
+                    user_id=uid,
+                    amount=round(expense.amount * pct / 100.0, 2),
+                ))
+        updated_expenses = len(expenses_to_update)
+
     session.commit()
     session.refresh(group)
-    return _build_group_response(group, session)
+    base = _build_group_response(group, session)
+    return UpdateSplitsResponse(
+        id=base.id,
+        name=base.name,
+        created_by=base.created_by,
+        members=base.members,
+        created_at=base.created_at,
+        updated_expenses=updated_expenses,
+    )

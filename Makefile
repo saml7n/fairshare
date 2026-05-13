@@ -1,4 +1,4 @@
-.PHONY: dev dev-server dev-web test test-server test-web deploy clean
+.PHONY: dev dev-server dev-web test test-server test-web docker-up docker-down docker-logs docker-build clean
 
 # Load .env and .env.local if they exist
 ifneq (,$(wildcard .env))
@@ -34,12 +34,18 @@ test-server:  ## Run server tests only
 test-web:  ## Run web tests only
 	cd web && npm test -- --run
 
-# ─── Cloud deployment ────────────────────────────────────────────
-deploy:  ## Deploy to Fly.io
-	fly deploy --ha=false
+# ─── Docker deployment ───────────────────────────────────────────
+docker-up:  ## Build and start all containers (app + ngrok)
+	docker compose --env-file .env.local up -d --build
 
-deploy-setup:  ## First-time Fly.io setup
-	./scripts/fly-setup.sh
+docker-down:  ## Stop all containers
+	docker compose --env-file .env.local down
+
+docker-logs:  ## Tail logs from all containers
+	docker compose --env-file .env.local logs -f
+
+docker-build:  ## Rebuild the app image without starting
+	docker compose --env-file .env.local build
 
 # ─── Cleanup ──────────────────────────────────────────────────────
 clean:  ## Remove database, caches

@@ -95,3 +95,7 @@ export interface PaymentItem {
   note: string
   created_at: string
 }
+
+export interface UpdateSplitsResponse extends GroupDetail {
+  updated_expenses: number
+}

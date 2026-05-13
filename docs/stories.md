@@ -411,3 +411,138 @@ As a **project owner**, I want **the app deployed and publicly accessible**, so 
 
 **Recorded answers:**
 - (to be filled during implementation)
+
+---
+
+## Story 9 — Per-expense member exclusion
+
+As a **group member**, I want **to untick people from a specific expense**, so that **only the members who actually participated in that expense share its cost** (like Splitwise's per-expense participant selection).
+
+### Acceptance criteria
+- [ ] When the Custom split mode is selected in the Add Expense form, each member row has a checkbox on the left.
+- [ ] Members are checked by default. Unchecking a member removes them from the split.
+- [ ] The split amounts for the remaining checked members are recalculated proportionally based on their `default_split_percent` relative to each other.
+- [ ] The validation message ("Total: £x / £y") only counts checked members.
+- [ ] An expense can only be submitted when the checked members' amounts sum to within £0.01 of the total.
+- [ ] If only one member is checked, 100% of the expense is assigned to them.
+- [ ] The `splits` array sent to the API contains only checked members (excluded members are simply absent from the payload — the backend already supports partial splits).
+- [ ] The expense list in the group detail page correctly reflects who was included (only included members appear in the split chips).
+- [ ] The Default split mode is unaffected — it always includes all members using their group percentages.
+
+### Unit tests
+File: `web/src/pages/__tests__/GroupDetail.memberExclusion.test.tsx`
+- Toggling a member's checkbox from checked to unchecked removes them from the custom splits state.
+- Amounts for remaining checked members are recalculated proportionally.
+- Submitting with an excluded member sends a splits array that does not contain that member's `user_id`.
+- Validation message reflects the sum of only checked members.
+
+### QA verification
+1. Log in as alice@test.com. Open "QA Group".
+2. Click **Add** expense. Enter description "Lunch", amount £30. Select **Custom** split.
+3. Verify both Alice and Bob appear with checkboxes checked and amounts pre-filled.
+4. Uncheck Bob. Verify Bob's row is greyed out / amount cleared. Verify "Total: £30.00 / £30.00" (all assigned to Alice).
+5. Submit. Verify the expense appears with only Alice's split chip.
+6. Open Balances — verify Bob's balance is unchanged (he owes nothing for Lunch).
+7. Add another expense "Coffee" £10, Custom split, uncheck Alice. Submit. Verify only Bob's split chip appears.
+
+### Blocked until answered
+1. When a member is unchecked, should their amount input be hidden or just zeroed and disabled? **Decision: hide the amount input row entirely when unchecked.**
+2. When re-checking a member, should their amount be restored to the proportional default or reset to 0? **Decision: recalculate proportional default from current total.**
+
+**Recorded answers:**
+1. Hide the amount input row entirely when unchecked.
+2. Recalculate proportional default from current total on re-check.
+
+### Completion
+- [ ] Unit tests pass: `pnpm test --run`
+- [ ] QA verification steps executed and confirmed
+- [ ] One commit: `git commit -m "feat: per-expense member exclusion checkboxes"`
+
+---
+
+## Story 10 — Custom split percentage entry
+
+As a **group member**, I want **to enter custom splits as percentages instead of amounts**, so that **I can think in round numbers (e.g. 70/30) rather than calculating exact figures myself**.
+
+### Acceptance criteria
+- [ ] In Custom split mode, a toggle sits above the per-member inputs labelled "£" and "%".
+- [ ] **£ mode** (default): existing behaviour — each member gets a numeric input showing their amount in pounds.
+- [ ] **% mode**: each member gets a numeric input (0–100) showing their percentage share. A live readout below shows "Total: 70% / 100%".
+- [ ] Switching between modes converts the existing values: £→% divides each amount by the expense total; %→£ multiplies each percent by the expense total.
+- [ ] The expense cannot be submitted in % mode until the percentages sum to 100 (within 0.1%).
+- [ ] Before the API call the frontend converts percentages to pound amounts (`Math.round(pct / 100 * total * 100) / 100`). The API always receives pound values.
+- [ ] Member exclusion checkboxes (Story 9) work in both modes: unchecking a member removes them; remaining members are recalculated proportionally.
+- [ ] The mode toggle resets when the Add Expense form is closed/re-opened (always starts in £ mode).
+
+### Unit tests
+File: `web/src/pages/__tests__/GroupDetail.splitPercentMode.test.tsx`
+- Switching to % mode converts existing £ amounts to percentages correctly.
+- Switching back to £ mode converts percentages back to £ amounts.
+- Submitting in % mode sends pounds (not percentages) to the API.
+- Validation message shows "Total: X% / 100%" in % mode.
+- Submitting with percentages not summing to 100 is blocked.
+
+### QA verification
+1. Log in as alice@test.com. Open "QA Group". Click **Add** expense, amount £60, Custom split.
+2. Verify default amounts: Alice £30, Bob £30 (50/50). Confirm £ mode is active.
+3. Click **%** mode toggle. Verify Alice 50%, Bob 50%.
+4. Change Alice to 70%, Bob to 30%. Verify "Total: 100% / 100%" in green.
+5. Submit expense "Dinner £60". Verify splits: Alice £42.00, Bob £18.00.
+6. Add expense "Snacks £10", switch to % mode, set Alice 100%, Bob 0%. Verify Bob unchecked or 0%. Submit. Verify only Alice's split chip appears.
+7. Try to submit with Alice 60%, Bob 30% (total 90%). Verify button is disabled / error shown.
+
+### Blocked until answered
+- None.
+
+**Recorded answers:**
+- N/A
+
+### Completion
+- [ ] Unit tests pass: `pnpm test --run`
+- [ ] QA verification steps executed and confirmed
+- [ ] One commit: `git commit -m "feat: percentage mode for custom expense splits"`
+
+---
+
+## Story 11 — Retroactive default-split propagation
+
+As a **group admin**, I want **an option to apply an updated default split to all past expenses that used the default split**, so that **I don't have to delete and re-enter old expenses when the agreed split ratio changes**.
+
+### Acceptance criteria
+- [ ] The `Expense` database model gains a boolean column `used_default_split` (default `True`; set to `False` when the expense is created with explicit `splits` provided).
+- [ ] A new Alembic migration adds the column with `DEFAULT TRUE` and back-fills existing rows.
+- [ ] `PUT /api/groups/{id}/splits` accepts an optional boolean body field `retroactive` (default `false`).
+- [ ] When `retroactive=true`, the endpoint finds all expenses in the group where `used_default_split=True` and recalculates their `splits` rows using the new percentages. Existing split rows are replaced atomically.
+- [ ] The Edit Splits form gains a checkbox below the percentage inputs: **"Also update past expenses that used the default split"**. It is unchecked by default.
+- [ ] Checking the checkbox and saving displays a confirmation: "X expense(s) updated."
+- [ ] Expenses created with Custom split mode (Story 9/10) are never touched, even when `retroactive=true`.
+- [ ] The API response for `PUT /api/groups/{id}/splits` includes `{ "updated_expenses": <count> }` in addition to the updated member list.
+
+### Unit tests
+File: `server/tests/test_splits_retroactive.py`
+- `PUT /api/groups/{id}/splits` with `retroactive=False` does not alter any expense splits.
+- `PUT /api/groups/{id}/splits` with `retroactive=True` recalculates splits for expenses where `used_default_split=True`.
+- Expenses with `used_default_split=False` are untouched even when `retroactive=True`.
+- The response body contains `updated_expenses` with the correct count.
+- New expenses created after the split change use the new percentages by default.
+
+### QA verification
+1. Log in as alice@test.com. Open "QA Group" (Alice 50%, Bob 50%).
+2. Verify existing expense splits show 50/50.
+3. Click **Edit splits**. Change Alice to 70%, Bob to 30%. Check **"Also update past expenses"**. Click **Save**.
+4. Verify the confirmation "X expense(s) updated." appears briefly.
+5. Verify existing expenses in the list now show 70/30 splits.
+6. Add a new expense — verify it defaults to 70/30.
+7. Add a **Custom** split expense (Story 9). Then change the default splits again with retroactive checked. Verify the custom-split expense is unchanged.
+8. Change splits back to 50/50 without the checkbox. Verify old expenses remain at 70/30 (no backpropagation).
+
+### Blocked until answered
+- None.
+
+**Recorded answers:**
+- N/A
+
+### Completion
+- [ ] Unit tests pass (`pytest server/tests/test_splits_retroactive.py -v`)
+- [ ] QA verification steps executed and confirmed
+- [ ] One commit: `git commit -m "feat: retroactive default-split propagation"`

@@ -5,13 +5,14 @@ from __future__ import annotations
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.auth import get_current_user
 from app.db.models import Group, GroupMember, Payment, User
 from app.db.session import get_session
+from app.limiter import limiter
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/groups/{group_id}/payments", tags=["payments"])
@@ -20,9 +21,9 @@ router = APIRouter(prefix="/api/groups/{group_id}/payments", tags=["payments"])
 class CreatePaymentRequest(BaseModel):
     """Request body for recording a payment."""
 
-    to_user_id: str
-    amount: float
-    note: str = ""
+    to_user_id: str = Field(..., max_length=36)
+    amount: float = Field(..., gt=0, le=1_000_000)
+    note: str = Field("", max_length=200)
 
 
 class PaymentResponse(BaseModel):
@@ -55,8 +56,10 @@ def _build_response(pmt: Payment, session: Session) -> PaymentResponse:
 
 
 @router.get("", response_model=list[PaymentResponse])
+@limiter.limit("60/minute")
 def list_payments(
     group_id: UUID,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[PaymentResponse]:
@@ -84,8 +87,10 @@ def list_payments(
 
 
 @router.post("", response_model=PaymentResponse)
+@limiter.limit("20/minute")
 def create_payment(
     group_id: UUID,
+    request: Request,
     body: CreatePaymentRequest,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),

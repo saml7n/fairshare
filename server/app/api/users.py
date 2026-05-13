@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import structlog
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.auth import get_current_user
 from app.db.models import User
 from app.db.session import get_session
+from app.limiter import limiter
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -24,22 +25,22 @@ class UserSearchResult(BaseModel):
 
 
 @router.get("/search", response_model=list[UserSearchResult])
+@limiter.limit("20/minute")
 def search_users(
-    q: str = Query(..., min_length=1),
+    request: Request,
+    q: str = Query(..., min_length=2, max_length=100),
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[UserSearchResult]:
-    """Search users by email or name prefix."""
-    query = q.lower()
-    users = session.exec(select(User)).all()
-    results = []
-    for u in users:
-        if u.id == user.id:
-            continue
-        if query in u.email.lower() or query in u.name.lower():
-            results.append(UserSearchResult(
-                id=str(u.id),
-                email=u.email,
-                name=u.name,
-            ))
-    return results[:20]
+    """Search users by exact email match. Excludes the current user."""
+    query = q.strip().lower()
+    if "@" not in query:
+        return []
+
+    match = session.exec(
+        select(User).where(User.id != user.id, User.email == query)
+    ).first()
+    if not match:
+        return []
+
+    return [UserSearchResult(id=str(match.id), email=match.email, name=match.name)]

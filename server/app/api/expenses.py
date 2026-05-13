@@ -5,13 +5,14 @@ from __future__ import annotations
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.auth import get_current_user
 from app.db.models import Expense, ExpenseSplit, Group, GroupMember, User
 from app.db.session import get_session
+from app.limiter import limiter
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/groups/{group_id}/expenses", tags=["expenses"])
@@ -20,17 +21,17 @@ router = APIRouter(prefix="/api/groups/{group_id}/expenses", tags=["expenses"])
 class SplitInput(BaseModel):
     """A single split entry in an expense creation request."""
 
-    user_id: str
-    amount: float
+    user_id: str = Field(..., max_length=36)
+    amount: float = Field(..., ge=0)
 
 
 class CreateExpenseRequest(BaseModel):
     """Request body for creating an expense."""
 
-    description: str
-    amount: float
-    paid_by: str
-    splits: list[SplitInput] | None = None
+    description: str = Field(..., min_length=1, max_length=200)
+    amount: float = Field(..., gt=0, le=1_000_000)
+    paid_by: str = Field(..., max_length=36)
+    splits: list[SplitInput] | None = Field(default=None, max_length=100)
 
 
 class SplitResponse(BaseModel):
@@ -73,8 +74,10 @@ def _check_membership(
 
 
 @router.get("", response_model=list[ExpenseResponse])
+@limiter.limit("60/minute")
 def list_expenses(
     group_id: UUID,
+    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[ExpenseResponse]:
@@ -115,8 +118,10 @@ def list_expenses(
 
 
 @router.post("", response_model=ExpenseResponse)
+@limiter.limit("20/minute")
 def create_expense(
     group_id: UUID,
+    request: Request,
     body: CreateExpenseRequest,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -130,6 +135,9 @@ def create_expense(
         raise HTTPException(status_code=400, detail="Amount must be positive")
 
     paid_by_uuid = UUID(body.paid_by)
+    if paid_by_uuid != user.id:
+        raise HTTPException(status_code=403, detail="You can only create expenses paid by yourself")
+
     payer_membership = session.exec(
         select(GroupMember).where(
             GroupMember.group_id == group_id,
@@ -145,6 +153,7 @@ def create_expense(
         amount=body.amount,
         paid_by=paid_by_uuid,
         created_by=user.id,
+        used_default_split=not bool(body.splits),
     )
     session.add(expense)
     session.flush()
@@ -156,7 +165,13 @@ def create_expense(
                 status_code=400,
                 detail=f"Splits sum ({split_total}) must equal expense amount ({body.amount})",
             )
+        member_ids = {
+            str(member.user_id)
+            for member in session.exec(select(GroupMember).where(GroupMember.group_id == group_id)).all()
+        }
         for s in body.splits:
+            if s.user_id not in member_ids:
+                raise HTTPException(status_code=400, detail="Split user must be a group member")
             es = ExpenseSplit(
                 expense_id=expense.id,
                 user_id=UUID(s.user_id),
