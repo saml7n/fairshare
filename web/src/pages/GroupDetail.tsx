@@ -114,7 +114,7 @@ export default function GroupDetail() {
       splits[uid] = parseFloat(val) || 0
     }
     const total = Object.values(splits).reduce((a, b) => a + b, 0)
-    if (Math.abs(total - 100) > 0.5) {
+    if (Math.abs(total - 100) > 0.1) {
       setSplitError(`Splits must sum to 100% (currently ${total.toFixed(1)}%)`)
       return
     }
@@ -162,7 +162,7 @@ export default function GroupDetail() {
       }
       if (expSplitMode === 'custom') {
         if (expSplitUnit === 'percent') {
-          if (Math.abs(customSplitTotal - 100) > 0.5) {
+          if (Math.abs(customSplitTotal - 100) > 0.1) {
             setExpError('Percentages must sum to 100%')
             setExpLoading(false)
             return
@@ -393,7 +393,7 @@ export default function GroupDetail() {
 
         {editingSplits && (
           <div className="mt-2 space-y-2">
-            <p className={`text-xs ${Math.abs(splitTotal - 100) > 0.5 ? 'text-red-400' : 'text-gray-500'}`}>
+            <p className={`text-xs ${Math.abs(splitTotal - 100) > 0.1 ? 'text-red-400' : 'text-gray-500'}`}>
               Total: {splitTotal.toFixed(1)}%
             </p>
             <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
@@ -699,7 +699,7 @@ export default function GroupDetail() {
                   )
                 })}
                 {expSplitUnit === 'percent' ? (
-                  <p className={`text-xs ${Math.abs(customSplitTotal - 100) > 0.5 ? 'text-red-400' : 'text-gray-500'}`}>
+                  <p className={`text-xs ${Math.abs(customSplitTotal - 100) > 0.1 ? 'text-red-400' : 'text-gray-500'}`}>
                     Total: {customSplitTotal.toFixed(1)}% / 100%
                   </p>
                 ) : (
@@ -713,7 +713,7 @@ export default function GroupDetail() {
             <div className="flex gap-2">
               <Button type="submit" size="sm" disabled={
                 expLoading || !expDesc.trim() || !expAmount ||
-                (expSplitMode === 'custom' && expSplitUnit === 'percent' && Math.abs(customSplitTotal - 100) > 0.5)
+                (expSplitMode === 'custom' && expSplitUnit === 'percent' && Math.abs(customSplitTotal - 100) > 0.1)
               }>
                 {expLoading ? 'Saving…' : 'Add Expense'}
               </Button>
