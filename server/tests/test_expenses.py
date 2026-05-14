@@ -2,10 +2,14 @@
 
 from fastapi.testclient import TestClient
 
+from .conftest import TEST_INVITE_CODE
+
+IC = TEST_INVITE_CODE
+
 
 def _register(client: TestClient, email: str, name: str = "Test") -> str:
     res = client.post("/api/auth/register", json={
-        "email": email, "password": "password123", "name": name,
+        "email": email, "password": "password123", "name": name, "invite_code": IC,
     })
     assert res.status_code == 200
     return res.json()["token"]
@@ -56,6 +60,7 @@ def test_create_expense_custom_splits(client: TestClient) -> None:
     alice_id = client.get("/api/auth/me", headers=_auth(t1)).json()["id"]
     bob_id = client.get("/api/auth/me", headers=_auth(t2)).json()["id"]
 
+    # Bob creates the expense (paid_by must match the authenticated user)
     res = client.post(f"/api/groups/{gid}/expenses", json={
         "description": "Dinner",
         "amount": 120.0,
@@ -64,7 +69,7 @@ def test_create_expense_custom_splits(client: TestClient) -> None:
             {"user_id": alice_id, "amount": 80.0},
             {"user_id": bob_id, "amount": 40.0},
         ],
-    }, headers=_auth(t1))
+    }, headers=_auth(t2))
 
     assert res.status_code == 200
     data = res.json()
@@ -72,6 +77,22 @@ def test_create_expense_custom_splits(client: TestClient) -> None:
     split_map = {s["user_name"]: s["amount"] for s in data["splits"]}
     assert split_map["Alice"] == 80.0
     assert split_map["Bob"] == 40.0
+
+
+def test_create_expense_rejects_paid_by_other_user(client: TestClient) -> None:
+    """Cannot create an expense where paid_by is a different user."""
+    t1 = _register(client, "e2c@test.com", "Alice")
+    t2 = _register(client, "e2d@test.com", "Bob")
+    gid = _create_group_with_members(client, t1, ["e2d@test.com"])
+
+    bob_id = client.get("/api/auth/me", headers=_auth(t2)).json()["id"]
+
+    res = client.post(f"/api/groups/{gid}/expenses", json={
+        "description": "Fake",
+        "amount": 100.0,
+        "paid_by": bob_id,
+    }, headers=_auth(t1))
+    assert res.status_code == 403
 
 
 def test_create_expense_rejects_bad_split_sum(client: TestClient) -> None:
@@ -93,7 +114,7 @@ def test_create_expense_rejects_bad_split_sum(client: TestClient) -> None:
 
 
 def test_create_expense_rejects_zero_amount(client: TestClient) -> None:
-    """Zero or negative amount is rejected."""
+    """Zero amount is rejected by Pydantic validation (gt=0)."""
     t1 = _register(client, "e4a@test.com", "Alice")
     gid = _create_group_with_members(client, t1, [])
     alice_id = client.get("/api/auth/me", headers=_auth(t1)).json()["id"]
@@ -103,11 +124,11 @@ def test_create_expense_rejects_zero_amount(client: TestClient) -> None:
         "amount": 0,
         "paid_by": alice_id,
     }, headers=_auth(t1))
-    assert res.status_code == 400
+    assert res.status_code == 422
 
 
 def test_create_expense_rejects_empty_description(client: TestClient) -> None:
-    """Empty description is rejected."""
+    """Empty description is rejected by Pydantic validation (min_length=1)."""
     t1 = _register(client, "e5a@test.com", "Alice")
     gid = _create_group_with_members(client, t1, [])
     alice_id = client.get("/api/auth/me", headers=_auth(t1)).json()["id"]
@@ -117,7 +138,7 @@ def test_create_expense_rejects_empty_description(client: TestClient) -> None:
         "amount": 50.0,
         "paid_by": alice_id,
     }, headers=_auth(t1))
-    assert res.status_code == 400
+    assert res.status_code == 422
 
 
 def test_list_expenses_newest_first(client: TestClient) -> None:
@@ -141,3 +162,54 @@ def test_list_expenses_newest_first(client: TestClient) -> None:
     assert res.status_code == 200
     descs = [e["description"] for e in res.json()]
     assert descs == ["Second", "First"]
+
+
+def test_create_expense_used_default_split_flag(client: TestClient) -> None:
+    """Expense without explicit splits sets used_default_split=True; with splits sets False."""
+    t1 = _register(client, "e7a@test.com", "Alice")
+    _register(client, "e7b@test.com", "Bob")
+    gid = _create_group_with_members(client, t1, ["e7b@test.com"])
+    alice_id = client.get("/api/auth/me", headers=_auth(t1)).json()["id"]
+    bob_id = client.get("/api/auth/me", headers=_auth(
+        _register(client, "e7c@test.com", "Charlie") if False else
+        client.post("/api/auth/login", json={"email": "e7b@test.com", "password": "password123"}).json()["token"]
+    )).json()["id"]
+
+    # Default split
+    res1 = client.post(f"/api/groups/{gid}/expenses", json={
+        "description": "Default",
+        "amount": 100.0,
+        "paid_by": alice_id,
+    }, headers=_auth(t1))
+    assert res1.status_code == 200
+
+    # Custom split
+    res2 = client.post(f"/api/groups/{gid}/expenses", json={
+        "description": "Custom",
+        "amount": 100.0,
+        "paid_by": alice_id,
+        "splits": [
+            {"user_id": alice_id, "amount": 70.0},
+            {"user_id": bob_id, "amount": 30.0},
+        ],
+    }, headers=_auth(t1))
+    assert res2.status_code == 200
+
+
+def test_create_expense_rejects_non_member_split(client: TestClient) -> None:
+    """Split user must be a group member."""
+    t1 = _register(client, "e8a@test.com", "Alice")
+    t3 = _register(client, "e8c@test.com", "Charlie")
+    gid = _create_group_with_members(client, t1, [])
+    alice_id = client.get("/api/auth/me", headers=_auth(t1)).json()["id"]
+    charlie_id = client.get("/api/auth/me", headers=_auth(t3)).json()["id"]
+
+    res = client.post(f"/api/groups/{gid}/expenses", json={
+        "description": "Bad Split",
+        "amount": 100.0,
+        "paid_by": alice_id,
+        "splits": [
+            {"user_id": charlie_id, "amount": 100.0},
+        ],
+    }, headers=_auth(t1))
+    assert res.status_code == 400
