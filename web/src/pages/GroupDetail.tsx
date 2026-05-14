@@ -114,7 +114,7 @@ export default function GroupDetail() {
       splits[uid] = parseFloat(val) || 0
     }
     const total = Object.values(splits).reduce((a, b) => a + b, 0)
-    if (Math.abs(total - 100) > 0.1) {
+    if (Math.abs(total - 100) > 0.5) {
       setSplitError(`Splits must sum to 100% (currently ${total.toFixed(1)}%)`)
       return
     }
@@ -162,7 +162,7 @@ export default function GroupDetail() {
       }
       if (expSplitMode === 'custom') {
         if (expSplitUnit === 'percent') {
-          if (Math.abs(customSplitTotal - 100) > 0.1) {
+          if (Math.abs(customSplitTotal - 100) > 0.5) {
             setExpError('Percentages must sum to 100%')
             setExpLoading(false)
             return
@@ -234,6 +234,16 @@ export default function GroupDetail() {
         sv[m.user_id] = String(Math.round(amount * share * 100) / 100)
       }
     }
+    const ids = Object.keys(sv)
+    if (ids.length > 1) {
+      const lastId = ids[ids.length - 1]!
+      const sumOthers = ids.slice(0, -1).reduce((s, k) => s + parseFloat(sv[k] ?? '0'), 0)
+      if (expSplitUnit === 'percent') {
+        sv[lastId] = String(Math.round((100 - sumOthers) * 10) / 10)
+      } else if (amount > 0) {
+        sv[lastId] = String(Math.round((amount - sumOthers) * 100) / 100)
+      }
+    }
     setExpCustomSplits(sv)
     setExpExcluded(newExcluded)
   }
@@ -249,6 +259,16 @@ export default function GroupDetail() {
         sv[m.user_id] = amount > 0 ? String(Math.round(currentVal / amount * 1000) / 10) : '0'
       } else {
         sv[m.user_id] = String(Math.round(currentVal / 100 * amount * 100) / 100)
+      }
+    }
+    const ids = Object.keys(sv)
+    if (ids.length > 1) {
+      const lastId = ids[ids.length - 1]!
+      const sumOthers = ids.slice(0, -1).reduce((s, k) => s + parseFloat(sv[k] ?? '0'), 0)
+      if (newUnit === 'percent') {
+        sv[lastId] = String(Math.round((100 - sumOthers) * 10) / 10)
+      } else if (amount > 0) {
+        sv[lastId] = String(Math.round((amount - sumOthers) * 100) / 100)
       }
     }
     setExpCustomSplits(sv)
@@ -373,7 +393,7 @@ export default function GroupDetail() {
 
         {editingSplits && (
           <div className="mt-2 space-y-2">
-            <p className={`text-xs ${Math.abs(splitTotal - 100) > 0.1 ? 'text-red-400' : 'text-gray-500'}`}>
+            <p className={`text-xs ${Math.abs(splitTotal - 100) > 0.5 ? 'text-red-400' : 'text-gray-500'}`}>
               Total: {splitTotal.toFixed(1)}%
             </p>
             <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
@@ -587,6 +607,16 @@ export default function GroupDetail() {
                           sv[m.user_id] = String(Math.round(amt * share * 100) / 100)
                         }
                       }
+                      const ids = Object.keys(sv)
+                      if (ids.length > 1) {
+                        const lastId = ids[ids.length - 1]!
+                        const sumOthers = ids.slice(0, -1).reduce((s, k) => s + parseFloat(sv[k] ?? '0'), 0)
+                        if (expSplitUnit === 'percent') {
+                          sv[lastId] = String(Math.round((100 - sumOthers) * 10) / 10)
+                        } else if (amt > 0) {
+                          sv[lastId] = String(Math.round((amt - sumOthers) * 100) / 100)
+                        }
+                      }
                       setExpCustomSplits(sv)
                     }
                   }}
@@ -669,7 +699,7 @@ export default function GroupDetail() {
                   )
                 })}
                 {expSplitUnit === 'percent' ? (
-                  <p className={`text-xs ${Math.abs(customSplitTotal - 100) > 0.1 ? 'text-red-400' : 'text-gray-500'}`}>
+                  <p className={`text-xs ${Math.abs(customSplitTotal - 100) > 0.5 ? 'text-red-400' : 'text-gray-500'}`}>
                     Total: {customSplitTotal.toFixed(1)}% / 100%
                   </p>
                 ) : (
@@ -683,7 +713,7 @@ export default function GroupDetail() {
             <div className="flex gap-2">
               <Button type="submit" size="sm" disabled={
                 expLoading || !expDesc.trim() || !expAmount ||
-                (expSplitMode === 'custom' && expSplitUnit === 'percent' && Math.abs(customSplitTotal - 100) > 0.1)
+                (expSplitMode === 'custom' && expSplitUnit === 'percent' && Math.abs(customSplitTotal - 100) > 0.5)
               }>
                 {expLoading ? 'Saving…' : 'Add Expense'}
               </Button>
