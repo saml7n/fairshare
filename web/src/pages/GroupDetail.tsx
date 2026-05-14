@@ -577,8 +577,15 @@ export default function GroupDetail() {
                     if (expSplitMode === 'custom') {
                       const amt = parseFloat(e.target.value) || 0
                       const sv: Record<string, string> = {}
-                      for (const m of group.members) {
-                        sv[m.user_id] = String(Math.round(amt * m.default_split_percent / 100 * 100) / 100)
+                      const includedMembers = group.members.filter(m => !expExcluded.has(m.user_id))
+                      const totalPct = includedMembers.reduce((sum, m) => sum + m.default_split_percent, 0)
+                      for (const m of includedMembers) {
+                        const share = totalPct > 0 ? m.default_split_percent / totalPct : 1 / includedMembers.length
+                        if (expSplitUnit === 'percent') {
+                          sv[m.user_id] = String(Math.round(share * 1000) / 10)
+                        } else {
+                          sv[m.user_id] = String(Math.round(amt * share * 100) / 100)
+                        }
                       }
                       setExpCustomSplits(sv)
                     }
@@ -589,17 +596,9 @@ export default function GroupDetail() {
             </div>
             <div>
               <Label>Paid by</Label>
-              <select
-                className="w-full rounded-md border border-gray-700 bg-gray-800 text-white px-3 py-2 text-sm"
-                value={expPaidBy}
-                onChange={(e) => setExpPaidBy(e.target.value)}
-              >
-                {group.members.map((m) => (
-                  <option key={m.user_id} value={m.user_id}>
-                    {m.name}{m.user_id === currentUser?.id ? ' (you)' : ''}
-                  </option>
-                ))}
-              </select>
+              <div className="w-full rounded-md border border-gray-700 bg-gray-800 text-white px-3 py-2 text-sm">
+                {group.members.find(m => m.user_id === currentUser?.id)?.name ?? 'You'} (you)
+              </div>
             </div>
             <div>
               <Label>Split method</Label>
