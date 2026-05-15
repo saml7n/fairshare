@@ -594,28 +594,20 @@ export default function GroupDetail() {
                   value={expAmount}
                   onChange={(e) => {
                     setExpAmount(e.target.value)
-                    if (expSplitMode === 'custom') {
+                    if (expSplitMode === 'custom' && expSplitUnit !== 'percent') {
                       const amt = parseFloat(e.target.value) || 0
                       const sv: Record<string, string> = {}
                       const includedMembers = group.members.filter(m => !expExcluded.has(m.user_id))
                       const totalPct = includedMembers.reduce((sum, m) => sum + m.default_split_percent, 0)
                       for (const m of includedMembers) {
                         const share = totalPct > 0 ? m.default_split_percent / totalPct : 1 / includedMembers.length
-                        if (expSplitUnit === 'percent') {
-                          sv[m.user_id] = String(Math.round(share * 1000) / 10)
-                        } else {
-                          sv[m.user_id] = String(Math.round(amt * share * 100) / 100)
-                        }
+                        sv[m.user_id] = String(Math.round(amt * share * 100) / 100)
                       }
                       const ids = Object.keys(sv)
-                      if (ids.length > 1) {
+                      if (ids.length > 1 && amt > 0) {
                         const lastId = ids[ids.length - 1]!
                         const sumOthers = ids.slice(0, -1).reduce((s, k) => s + parseFloat(sv[k] ?? '0'), 0)
-                        if (expSplitUnit === 'percent') {
-                          sv[lastId] = String(Math.round((100 - sumOthers) * 10) / 10)
-                        } else if (amt > 0) {
-                          sv[lastId] = String(Math.round((amt - sumOthers) * 100) / 100)
-                        }
+                        sv[lastId] = String(Math.round((amt - sumOthers) * 100) / 100)
                       }
                       setExpCustomSplits(sv)
                     }
