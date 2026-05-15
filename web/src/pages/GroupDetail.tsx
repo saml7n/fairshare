@@ -234,6 +234,16 @@ export default function GroupDetail() {
         sv[m.user_id] = String(Math.round(amount * share * 100) / 100)
       }
     }
+    const ids = Object.keys(sv)
+    if (ids.length > 1) {
+      const lastId = ids[ids.length - 1]!
+      const sumOthers = ids.slice(0, -1).reduce((s, k) => s + parseFloat(sv[k] ?? '0'), 0)
+      if (expSplitUnit === 'percent') {
+        sv[lastId] = String(Math.round((100 - sumOthers) * 10) / 10)
+      } else if (amount > 0) {
+        sv[lastId] = String(Math.round((amount - sumOthers) * 100) / 100)
+      }
+    }
     setExpCustomSplits(sv)
     setExpExcluded(newExcluded)
   }
@@ -249,6 +259,16 @@ export default function GroupDetail() {
         sv[m.user_id] = amount > 0 ? String(Math.round(currentVal / amount * 1000) / 10) : '0'
       } else {
         sv[m.user_id] = String(Math.round(currentVal / 100 * amount * 100) / 100)
+      }
+    }
+    const ids = Object.keys(sv)
+    if (ids.length > 1) {
+      const lastId = ids[ids.length - 1]!
+      const sumOthers = ids.slice(0, -1).reduce((s, k) => s + parseFloat(sv[k] ?? '0'), 0)
+      if (newUnit === 'percent') {
+        sv[lastId] = String(Math.round((100 - sumOthers) * 10) / 10)
+      } else if (amount > 0) {
+        sv[lastId] = String(Math.round((amount - sumOthers) * 100) / 100)
       }
     }
     setExpCustomSplits(sv)
@@ -574,11 +594,20 @@ export default function GroupDetail() {
                   value={expAmount}
                   onChange={(e) => {
                     setExpAmount(e.target.value)
-                    if (expSplitMode === 'custom') {
+                    if (expSplitMode === 'custom' && expSplitUnit !== 'percent') {
                       const amt = parseFloat(e.target.value) || 0
                       const sv: Record<string, string> = {}
-                      for (const m of group.members) {
-                        sv[m.user_id] = String(Math.round(amt * m.default_split_percent / 100 * 100) / 100)
+                      const includedMembers = group.members.filter(m => !expExcluded.has(m.user_id))
+                      const totalPct = includedMembers.reduce((sum, m) => sum + m.default_split_percent, 0)
+                      for (const m of includedMembers) {
+                        const share = totalPct > 0 ? m.default_split_percent / totalPct : 1 / includedMembers.length
+                        sv[m.user_id] = String(Math.round(amt * share * 100) / 100)
+                      }
+                      const ids = Object.keys(sv)
+                      if (ids.length > 1 && amt > 0) {
+                        const lastId = ids[ids.length - 1]!
+                        const sumOthers = ids.slice(0, -1).reduce((s, k) => s + parseFloat(sv[k] ?? '0'), 0)
+                        sv[lastId] = String(Math.round((amt - sumOthers) * 100) / 100)
                       }
                       setExpCustomSplits(sv)
                     }
@@ -589,17 +618,9 @@ export default function GroupDetail() {
             </div>
             <div>
               <Label>Paid by</Label>
-              <select
-                className="w-full rounded-md border border-gray-700 bg-gray-800 text-white px-3 py-2 text-sm"
-                value={expPaidBy}
-                onChange={(e) => setExpPaidBy(e.target.value)}
-              >
-                {group.members.map((m) => (
-                  <option key={m.user_id} value={m.user_id}>
-                    {m.name}{m.user_id === currentUser?.id ? ' (you)' : ''}
-                  </option>
-                ))}
-              </select>
+              <div className="w-full rounded-md border border-gray-700 bg-gray-800 text-white px-3 py-2 text-sm">
+                {group.members.find(m => m.user_id === currentUser?.id)?.name ?? 'You'} (you)
+              </div>
             </div>
             <div>
               <Label>Split method</Label>

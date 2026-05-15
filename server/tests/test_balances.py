@@ -7,10 +7,14 @@ from fastapi.testclient import TestClient
 from app.api.balances import compute_net_balances, minimise_transfers
 from app.db.models import Expense, ExpenseSplit, Payment
 
+from .conftest import TEST_INVITE_CODE
+
+IC = TEST_INVITE_CODE
+
 
 def _register(client: TestClient, email: str, name: str = "Test") -> str:
     res = client.post("/api/auth/register", json={
-        "email": email, "password": "password123", "name": name,
+        "email": email, "password": "password123", "name": name, "invite_code": IC,
     })
     assert res.status_code == 200
     return res.json()["token"]
@@ -60,7 +64,7 @@ def test_net_balances_with_payment() -> None:
 
 
 def test_minimise_two_people() -> None:
-    """Two people → single transfer."""
+    """Two people -> single transfer."""
     alice, bob = uuid4(), uuid4()
     transfers = minimise_transfers({alice: 50.0, bob: -50.0})
     assert len(transfers) == 1
@@ -68,7 +72,7 @@ def test_minimise_two_people() -> None:
 
 
 def test_minimise_three_people_chain() -> None:
-    """Three people with chain debt → minimised."""
+    """Three people with chain debt -> minimised."""
     a, b, c = uuid4(), uuid4(), uuid4()
     transfers = minimise_transfers({a: 60.0, b: -20.0, c: -40.0})
     assert len(transfers) == 2
@@ -77,7 +81,7 @@ def test_minimise_three_people_chain() -> None:
 
 
 def test_minimise_all_settled() -> None:
-    """All balances zero → no transfers."""
+    """All balances zero -> no transfers."""
     a, b = uuid4(), uuid4()
     transfers = minimise_transfers({a: 0.0, b: 0.0})
     assert len(transfers) == 0
@@ -98,7 +102,7 @@ def test_minimise_rounding() -> None:
 def test_balances_endpoint_two_members(client: TestClient) -> None:
     """Balances endpoint returns correct data for a 2-member group."""
     t1 = _register(client, "b1a@test.com", "Alice")
-    t2 = _register(client, "b1b@test.com", "Bob")
+    _register(client, "b1b@test.com", "Bob")
     alice_id = _me(client, t1)
 
     gid = client.post("/api/groups", json={
@@ -137,15 +141,26 @@ def test_balances_non_member_forbidden(client: TestClient) -> None:
     assert res.status_code == 403
 
 
-def test_balances_single_member_no_debts(client: TestClient) -> None:
-    """Single member group has no debts."""
-    t1 = _register(client, "b3a@test.com", "Solo")
+def test_balances_endpoint_with_payment(client: TestClient) -> None:
+    """Balances endpoint correctly reflects a payment."""
+    t1 = _register(client, "b3a@test.com", "Alice")
+    t2 = _register(client, "b3b@test.com", "Bob")
+    alice_id = _me(client, t1)
 
     gid = client.post("/api/groups", json={
-        "name": "Solo", "member_emails": [],
+        "name": "Pay Bal", "member_emails": ["b3b@test.com"],
     }, headers=_auth(t1)).json()["id"]
+
+    client.post(f"/api/groups/{gid}/expenses", json={
+        "description": "Hotel", "amount": 200.0, "paid_by": alice_id,
+    }, headers=_auth(t1))
+
+    client.post(f"/api/groups/{gid}/payments", json={
+        "to_user_id": alice_id, "amount": 50.0,
+    }, headers=_auth(t2))
 
     res = client.get(f"/api/groups/{gid}/balances", headers=_auth(t1))
     assert res.status_code == 200
-    data = res.json()
-    assert len(data["simplified_debts"]) == 0
+    bal_map = {b["name"]: b["balance"] for b in res.json()["balances"]}
+    assert bal_map["Alice"] == 50.0
+    assert bal_map["Bob"] == -50.0

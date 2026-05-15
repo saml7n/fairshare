@@ -2,10 +2,14 @@
 
 from fastapi.testclient import TestClient
 
+from .conftest import TEST_INVITE_CODE
+
+IC = TEST_INVITE_CODE
+
 
 def _register(client: TestClient, email: str, name: str = "Test") -> str:
     res = client.post("/api/auth/register", json={
-        "email": email, "password": "password123", "name": name,
+        "email": email, "password": "password123", "name": name, "invite_code": IC,
     })
     assert res.status_code == 200
     return res.json()["token"]
@@ -76,14 +80,14 @@ def test_payment_updates_balances(client: TestClient) -> None:
 
 
 def test_payment_rejects_zero_amount(client: TestClient) -> None:
-    """Zero or negative amount is rejected."""
+    """Zero amount is rejected by Pydantic validation (gt=0)."""
     t1, t2, alice_id, bob_id, gid = _setup_group(client)
 
     res = client.post(f"/api/groups/{gid}/payments", json={
         "to_user_id": alice_id,
         "amount": 0,
     }, headers=_auth(t2))
-    assert res.status_code == 400
+    assert res.status_code == 422
 
 
 def test_payment_rejects_self_payment(client: TestClient) -> None:

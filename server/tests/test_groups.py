@@ -2,6 +2,10 @@
 
 from fastapi.testclient import TestClient
 
+from .conftest import TEST_INVITE_CODE
+
+IC = TEST_INVITE_CODE
+
 
 def _register(client: TestClient, email: str, name: str = "Test") -> str:
     """Register a user and return their JWT token."""
@@ -9,6 +13,7 @@ def _register(client: TestClient, email: str, name: str = "Test") -> str:
         "email": email,
         "password": "password123",
         "name": name,
+        "invite_code": IC,
     })
     assert res.status_code == 200
     return res.json()["token"]
@@ -128,19 +133,19 @@ def test_update_splits(client: TestClient) -> None:
 
 
 def test_update_splits_bad_sum(client: TestClient) -> None:
-    """Splits that don't sum to 100% return 400."""
+    """Splits that don't sum to 100% are rejected."""
     t1 = _register(client, "g9a@test.com", "Alice")
     _register(client, "g9b@test.com", "Bob")
     group = client.post("/api/groups", json={
-        "name": "Bad",
+        "name": "Bad Sum",
         "member_emails": ["g9b@test.com"],
     }, headers=_auth(t1))
     gid = group.json()["id"]
     members = group.json()["members"]
-    alice_id = members[0]["user_id"]
-    bob_id = members[1]["user_id"]
+    alice_id = [m for m in members if m["name"] == "Alice"][0]["user_id"]
+    bob_id = [m for m in members if m["name"] == "Bob"][0]["user_id"]
 
     res = client.put(f"/api/groups/{gid}/splits", json={
-        "splits": {alice_id: 70.0, bob_id: 70.0},
+        "splits": {alice_id: 60.0, bob_id: 60.0},
     }, headers=_auth(t1))
     assert res.status_code == 400
