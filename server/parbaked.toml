@@ -1,0 +1,25 @@
+# fairshare — parbaked configuration.
+#
+# Every PARBAKED_* env var also works here as a toml key.
+# Full list: https://github.com/saml7n/parbaked/blob/main/AGENTS.md
+# ──────────────────────────────────────────────────────────────────────────
+
+app_name = "fairshare"
+
+# Same SQLite file as the previous fairshare build, so existing rows survive.
+database_url = "sqlite:///./fairshare.db"
+
+# Match the previous fairshare invite-gate cadence (5 signups/hr, 20 logins/hr).
+ratelimit_signup = "5/hour"
+ratelimit_login = "20/hour"
+
+[frontend]
+# React app lives at ../web. parbaked deploy builds it via the multi-stage
+# Dockerfile and serves the dist/ output at /.
+source_dir = "../web"
+build_command = "npm ci && npm run build"
+dist_subpath = "dist"
+build_image = "node:20-alpine"
+
+fly_region = "lhr"
+fly_max_machines = 2

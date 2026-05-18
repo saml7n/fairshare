@@ -17,7 +17,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { ...init, headers })
 
   if (res.status === 401) {
-    const isAuthEndpoint = path.startsWith('/api/auth/')
+    // parbaked owns /auth/* — don't bounce the user on 401s from those
+    // endpoints (e.g. wrong-password login) since they handle their own
+    // error UX inline.
+    const isAuthEndpoint = path.startsWith('/auth/')
     if (!isAuthEndpoint) {
       const { clearToken } = await import('./auth')
       clearToken()
@@ -43,17 +46,20 @@ import type { BalancesResponse, CreateExpenseSplit, DashboardData, ExpenseItem, 
 
 export const api = {
   auth: {
-    register: (email: string, password: string, name: string, inviteCode: string) =>
-      request<{ ok: boolean; token: string; user: { id: string; email: string; name: string } | null }>('/api/auth/register', {
+    // parbaked's /auth/signup creates a pending user — the admin must
+    // approve before login works. The legacy invite-code gate is gone;
+    // the admin queue at /auth/admin is the new gate.
+    register: (email: string, password: string, name: string, _inviteCode: string) =>
+      request<{ user_id: string; status: string; email_sent: boolean }>('/auth/signup', {
         method: 'POST',
-        body: JSON.stringify({ email, password, name, invite_code: inviteCode }),
+        body: JSON.stringify({ email, password, name }),
       }),
     login: (email: string, password: string) =>
-      request<{ ok: boolean; token: string; user: { id: string; email: string; name: string } | null }>('/api/auth/login', {
+      request<{ token: string; user: { id: string; email: string; name: string; status: string } }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       }),
-    me: () => request<{ id: string; email: string; name: string }>('/api/auth/me'),
+    me: () => request<{ id: string; email: string; name: string }>('/auth/me'),
   },
   groups: {
     list: () => request<GroupListItem[]>('/api/groups'),

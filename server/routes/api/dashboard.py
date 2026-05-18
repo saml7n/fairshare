@@ -9,21 +9,14 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from app.api.balances import compute_net_balances
-from app.auth import get_current_user
-from app.db.models import (
-    Expense,
-    ExpenseSplit,
-    Group,
-    GroupMember,
-    Payment,
-    User,
-)
-from app.db.session import get_session
-from app.limiter import limiter
+from services import compute_net_balances
+from parbaked import current_user as get_current_user
+from models import Expense, ExpenseSplit, Group, GroupMember, Payment
+from parbaked.auth.models import User
+from parbaked import get_session
 
 logger = structlog.get_logger()
-router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+router = APIRouter()
 
 
 class GroupSummary(BaseModel):
@@ -45,9 +38,7 @@ class DashboardResponse(BaseModel):
 
 
 @router.get("", response_model=DashboardResponse)
-@limiter.limit("30/minute")
 def get_dashboard(
-    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> DashboardResponse:

@@ -27,3 +27,9 @@ Thumbs.db
 
 # Data
 server/data/
+
+# parbaked
+.parbaked.json
+.parbaked/
+server/.parbaked.json
+server/.parbaked/

@@ -9,13 +9,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from app.auth import get_current_user
-from app.db.models import Expense, ExpenseSplit, Group, GroupMember, User
-from app.db.session import get_session
-from app.limiter import limiter
+from parbaked import current_user as get_current_user
+from models import Expense, ExpenseSplit, Group, GroupMember
+from parbaked.auth.models import User
+from parbaked import get_session
 
 logger = structlog.get_logger()
-router = APIRouter(prefix="/api/groups/{group_id}/expenses", tags=["expenses"])
+router = APIRouter()
 
 
 class SplitInput(BaseModel):
@@ -74,10 +74,8 @@ def _check_membership(
 
 
 @router.get("", response_model=list[ExpenseResponse])
-@limiter.limit("60/minute")
 def list_expenses(
     group_id: UUID,
-    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[ExpenseResponse]:
@@ -118,10 +116,8 @@ def list_expenses(
 
 
 @router.post("", response_model=ExpenseResponse)
-@limiter.limit("20/minute")
 def create_expense(
     group_id: UUID,
-    request: Request,
     body: CreateExpenseRequest,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),

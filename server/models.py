@@ -1,7 +1,10 @@
-"""SQLModel database models for FairShare.
+"""fairshare — SQLModel tables.
 
-Models are added incrementally — one per story.
+parbaked owns the ``users`` table (see ``parbaked.auth.models.User``).
+All fairshare-specific tables are keyed on ``users.id`` via foreign keys.
 """
+
+from __future__ import annotations
 
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
@@ -10,30 +13,13 @@ from sqlmodel import Field, SQLModel
 
 
 def _utcnow() -> datetime:
-    """Return current UTC time."""
     return datetime.now(timezone.utc)
 
 
 # ---------------------------------------------------------------------------
-# User (Story 2)
+# Group + GroupMember
 # ---------------------------------------------------------------------------
 
-class User(SQLModel, table=True):
-    """A registered user account."""
-
-    __tablename__ = "users"
-
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    email: str = Field(index=True, unique=True)
-    password_hash: str = Field(default="")
-    name: str = Field(default="")
-    is_admin: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=_utcnow)
-
-
-# ---------------------------------------------------------------------------
-# Group + GroupMember (Story 3)
-# ---------------------------------------------------------------------------
 
 class Group(SQLModel, table=True):
     """An expense group."""
@@ -59,8 +45,9 @@ class GroupMember(SQLModel, table=True):
 
 
 # ---------------------------------------------------------------------------
-# Expense + ExpenseSplit (Story 4)
+# Expense + ExpenseSplit
 # ---------------------------------------------------------------------------
+
 
 class Expense(SQLModel, table=True):
     """An expense recorded in a group."""
@@ -89,8 +76,9 @@ class ExpenseSplit(SQLModel, table=True):
 
 
 # ---------------------------------------------------------------------------
-# Payment (Story 6 model, created here for Story 5 balance calculations)
+# Payment
 # ---------------------------------------------------------------------------
+
 
 class Payment(SQLModel, table=True):
     """A manual payment from one user to another within a group."""

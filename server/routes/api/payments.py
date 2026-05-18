@@ -9,13 +9,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from app.auth import get_current_user
-from app.db.models import Group, GroupMember, Payment, User
-from app.db.session import get_session
-from app.limiter import limiter
+from parbaked import current_user as get_current_user
+from models import Group, GroupMember, Payment
+from parbaked.auth.models import User
+from parbaked import get_session
 
 logger = structlog.get_logger()
-router = APIRouter(prefix="/api/groups/{group_id}/payments", tags=["payments"])
+router = APIRouter()
 
 
 class CreatePaymentRequest(BaseModel):
@@ -56,10 +56,8 @@ def _build_response(pmt: Payment, session: Session) -> PaymentResponse:
 
 
 @router.get("", response_model=list[PaymentResponse])
-@limiter.limit("60/minute")
 def list_payments(
     group_id: UUID,
-    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[PaymentResponse]:
@@ -87,10 +85,8 @@ def list_payments(
 
 
 @router.post("", response_model=PaymentResponse)
-@limiter.limit("20/minute")
 def create_payment(
     group_id: UUID,
-    request: Request,
     body: CreatePaymentRequest,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),

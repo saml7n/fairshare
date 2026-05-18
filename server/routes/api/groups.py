@@ -9,13 +9,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from app.auth import get_current_user
-from app.db.models import Expense, ExpenseSplit, Group, GroupMember, User
-from app.db.session import get_session
-from app.limiter import limiter
+from parbaked import current_user as get_current_user
+from models import Expense, ExpenseSplit, Group, GroupMember
+from parbaked.auth.models import User
+from parbaked import get_session
 
 logger = structlog.get_logger()
-router = APIRouter(prefix="/api/groups", tags=["groups"])
+router = APIRouter()
 
 
 class CreateGroupRequest(BaseModel):
@@ -106,9 +106,7 @@ def _build_group_response(group: Group, session: Session) -> GroupResponse:
 
 
 @router.get("", response_model=list[GroupListItem])
-@limiter.limit("60/minute")
 def list_groups(
-    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[GroupListItem]:
@@ -137,9 +135,7 @@ def list_groups(
 
 
 @router.post("", response_model=GroupResponse)
-@limiter.limit("20/minute")
 def create_group(
-    request: Request,
     body: CreateGroupRequest,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -175,10 +171,8 @@ def create_group(
 
 
 @router.get("/{group_id}", response_model=GroupResponse)
-@limiter.limit("60/minute")
 def get_group(
     group_id: UUID,
-    request: Request,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> GroupResponse:
@@ -200,10 +194,8 @@ def get_group(
 
 
 @router.post("/{group_id}/members", response_model=GroupResponse)
-@limiter.limit("20/minute")
 def add_member(
     group_id: UUID,
-    request: Request,
     body: AddMemberRequest,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -256,10 +248,8 @@ def add_member(
 
 
 @router.put("/{group_id}/splits", response_model=UpdateSplitsResponse)
-@limiter.limit("20/minute")
 def update_splits(
     group_id: UUID,
-    request: Request,
     body: UpdateSplitsRequest,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
