@@ -14,12 +14,11 @@ ratelimit_signup = "5/hour"
 ratelimit_login = "20/hour"
 
 [frontend]
-# React app lives at ../web. parbaked deploy builds it via the multi-stage
-# Dockerfile and serves the dist/ output at /.
-source_dir = "../web"
-build_command = "npm ci && npm run build"
-dist_subpath = "dist"
-build_image = "node:20-alpine"
+# Pre-built React bundle. The build step runs locally (``npm run build``
+# in ../web) before each deploy and copies dist/ → server/web/. We
+# don't use the multi-stage Docker build because the React source lives
+# outside the build context (monorepo, see parbaked issue #121).
+source_dir = "web"
 
 fly_region = "lhr"
 fly_max_machines = 2
